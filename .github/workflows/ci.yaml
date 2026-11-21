@@ -31,11 +31,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # Nix, devenv and the devenv cache. Pulls what a previous run built from ext-php-rs, and
-      # pushes what this one builds (outside pull requests, which have no token):
-      # cargo-zigbuild, the PHP headers for each target and the real-world extensions are built
-      # only when they change. Projects whose nixpkgs is this flake's (the template's) get the
-      # headers and cargo-zigbuild from it too.
       - name: Set up devenv
         uses: sagikazarmark/setup-devenv@c36f9e57ca50ee1a6dad1a05a1a684e321f8096a # v0.3.0
         with:
@@ -61,8 +56,8 @@ jobs:
           path: dist/
           if-no-files-found: error
 
-  check:
-    name: Format, lint and devenv
+  checks:
+    name: Checks
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -100,8 +95,7 @@ jobs:
         ts: [nts, zts]
         arch: [x86_64, arm64]
         libc: [glibc, musl]
-        # The official images of 8.6 are ZTS only (docker-library/php#1686). load-macos loads
-        # 8.6 NTS.
+        # The official images of 8.6 are ZTS only (docker-library/php#1686). load-macos loads 8.6 NTS.
         exclude:
           - php: "8.6"
             ts: nts
