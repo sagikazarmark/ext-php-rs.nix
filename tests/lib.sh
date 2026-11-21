@@ -6,7 +6,15 @@
 # official image of that PHP and its Docker platform.
 image_for() {
   local php=$1 ts=$2 arch=$3 libc=$4 variant=cli distribution=trixie
-  [ "$ts" = zts ] && variant=zts
+  if [ "$(printf '%s\n' 8.6 "$php" | sort -V | head -n 1)" = 8.6 ]; then
+    # From 8.6 the images are ZTS only, without a -zts variant (docker-library/php#1686).
+    if [ "$ts" = nts ]; then
+      echo "$(basename "$0"): PHP $php has no NTS official image (docker-library/php#1686)" >&2
+      return 1
+    fi
+  else
+    [ "$ts" = zts ] && variant=zts
+  fi
   [ "$libc" = musl ] && distribution=alpine
   image=docker.io/library/php:$php-$variant-$distribution
   platform=linux/amd64
@@ -37,6 +45,8 @@ extension_name() {
 
 # A script for an official image's sh that runs the .phpt tests in /tests with the image's
 # run-tests.php (which writes each test's output next to it, so from a copy), passing its
-# arguments to run-tests.php: sh -c "$run_tests_in_image" sh <arguments>.
+# arguments to run-tests.php: sh -c "$run_tests_in_image" sh <arguments>. First, PHP with those
+# arguments must start without a word: run-tests.php skips the tests of an extension that does
+# not load (one of the other thread safety, say), and passes.
 # shellcheck disable=SC2016 # expands in the image's shell
-run_tests_in_image='cp -r /tests /tmp/tests && NO_INTERACTION=1 REPORT_EXIT_STATUS=1 php /usr/local/lib/php/build/run-tests.php -P -q --show-diff "$@" /tmp/tests'
+run_tests_in_image='if ! out=$(php "$@" -r "" 2>&1) || [ -n "$out" ]; then printf "%s\n" "$out" >&2; exit 1; fi && cp -r /tests /tmp/tests && NO_INTERACTION=1 REPORT_EXIT_STATUS=1 php /usr/local/lib/php/build/run-tests.php -P -q --show-diff "$@" /tmp/tests'
