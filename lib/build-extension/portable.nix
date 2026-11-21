@@ -68,6 +68,7 @@ let
     if allowedLibraries != null then allowedLibraries else defaultAllowedLibraries.${target.libc};
   phpZts = (php.unwrapped or php).ztsSupport or false;
   headers = mkPhpHeaders { inherit php target zts; };
+  buildRust = stdenv.buildPlatform.rust;
 in
 {
   inherit headers zts darwin;
@@ -98,6 +99,13 @@ in
     # bindgen parses the target's headers with zig's builtin headers (cargo-zigbuild adds
     # them), which only the libclang of zig's own LLVM version understands.
     LIBCLANG_PATH = "${zigLibclang}/lib";
+  }
+  # Build scripts and proc macros are linked for the build platform, by the linker a package's
+  # .cargo/config.toml may name for its triple (kcs/mjml names aarch64-linux-gnu-gcc for
+  # aarch64 glibc), which cargo-zigbuild only replaces for the target: the build platform's own
+  # C compiler instead.
+  // lib.optionalAttrs (buildRust.rustcTarget != target.rustTarget) {
+    "CARGO_TARGET_${buildRust.cargoEnvVarTarget}_LINKER" = "${stdenv.cc}/bin/cc";
   };
 
   # Each one unless the package sets it.

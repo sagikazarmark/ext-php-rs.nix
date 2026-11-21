@@ -51,7 +51,7 @@ jobs:
         run: |
           out=$(devenv build outputs.load-tests | jq -r '."outputs.load-tests"')
           mkdir dist
-          cp -L "$out"/* dist/
+          cp -rL "$out"/* dist/
 
       - name: Upload the archives
         if: matrix.runner == 'ubuntu-latest'
