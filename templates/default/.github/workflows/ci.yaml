@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+
+      # ext-php-rs.cachix.org has the PHP headers and cargo-zigbuild. With the repository
+      # variable CACHIX_CACHE (and the secret CACHIX_AUTH_TOKEN), this project's own cache
+      # too, which builds outside pull requests push to.
+      - name: Set up Cachix
+        uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: ${{ vars.CACHIX_CACHE || 'ext-php-rs' }}
+          extraPullNames: ${{ vars.CACHIX_CACHE && 'ext-php-rs' || '' }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          skipPush: ${{ github.event_name == 'pull_request' }}
+
+      - name: Check
+        run: nix flake check -L
+
+      # The release archives, cross-compiled for every target: a release builds the same.
+      - name: Build the PIE archives
+        if: matrix.runner == 'ubuntu-latest'
+        run: nix build -L .#pie

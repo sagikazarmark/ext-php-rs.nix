@@ -1,0 +1,4 @@
+# PHP resolves the Zend API's symbols when it loads the module: `cargo build` on macOS must
+# leave them undefined. Nix builds set this themselves.
+[target.'cfg(target_os = "macos")']
+rustflags = ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"]

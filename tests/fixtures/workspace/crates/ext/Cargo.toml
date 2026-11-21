@@ -1,0 +1,6 @@
+[package]
+name = "ext"
+version.workspace = true
+
+[lib]
+crate-type = ["cdylib"]

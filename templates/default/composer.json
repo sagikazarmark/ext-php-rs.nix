@@ -1,0 +1,14 @@
+{
+  "name": "acme/hello",
+  "description": "A PHP extension written in Rust with ext-php-rs.",
+  "type": "php-ext",
+  "license": "MIT",
+  "require": {
+    "php": ">=8.4"
+  },
+  "php-ext": {
+    "extension-name": "hello",
+    "download-url-method": ["pre-packaged-binary"],
+    "os-families": ["linux", "darwin"]
+  }
+}

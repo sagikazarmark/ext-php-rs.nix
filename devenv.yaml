@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://devenv.sh/devenv.schema.json
+inputs:
+  ext-php-rs:
+    url: git+file:.
+  nixpkgs:
+    follows: ext-php-rs/nixpkgs
+  rust-overlay:
+    url: github:oxalica/rust-overlay
+    inputs:
+      nixpkgs:
+        follows: nixpkgs

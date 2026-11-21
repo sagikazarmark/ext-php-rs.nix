@@ -1,0 +1,12 @@
+# For extensionArgs (tests/checks.nix): a package whose version is the workspace's, with a
+# [lib] name, and a composer.json naming the module. Never built.
+[workspace.package]
+version = "1.2.3"
+
+[package]
+name = "ext-demo"
+version.workspace = true
+
+[lib]
+name = "demo_ext"
+crate-type = ["cdylib"]

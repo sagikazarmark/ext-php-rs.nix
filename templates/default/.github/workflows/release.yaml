@@ -1,0 +1,62 @@
+name: Release
+
+# Pushing a tag builds PIE's prebuilt binaries and publishes them as a GitHub release's assets,
+# where `pie install` finds them. PIE names them with the tag as Packagist reports it, so the
+# tag must be Cargo.toml's version exactly: 1.2.0, not v1.2.0.
+on:
+  push:
+    tags: ["*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+
+      - name: Set up Cachix
+        uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: ${{ vars.CACHIX_CACHE || 'ext-php-rs' }}
+          extraPullNames: ${{ vars.CACHIX_CACHE && 'ext-php-rs' || '' }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Check the tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(nix eval --raw .#packages.x86_64-linux.default.version)
+          if [ "$TAG" != "$version" ]; then
+            echo "::error::The tag ($TAG) must be the extension's version ($version): PIE looks for archives named with the tag."
+            exit 1
+          fi
+
+      - name: Build the PIE archives
+        run: |
+          nix build -L .#pie
+          mkdir dist
+          cp -L result/* dist/
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" dist/* --verify-tag --generate-notes --repo "$GITHUB_REPOSITORY"
+          fi

@@ -1,0 +1,16 @@
+[package]
+name = "hello"
+version = "0.1.0"
+edition = "2021"
+description = "A PHP extension written in Rust with ext-php-rs."
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+ext-php-rs = "=0.16.4"
+
+[profile.release]
+strip = "debuginfo"

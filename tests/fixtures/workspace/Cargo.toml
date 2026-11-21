@@ -1,0 +1,8 @@
+# For extensionArgs (tests/checks.nix): a workspace whose member inherits its version. Never
+# built.
+[workspace]
+members = ["crates/ext"]
+resolver = "2"
+
+[workspace.package]
+version = "2.0.0"

@@ -1,0 +1,7 @@
+{
+  "name": "ext-php-rs-nix/demo",
+  "type": "php-ext",
+  "php-ext": {
+    "extension-name": "demo"
+  }
+}

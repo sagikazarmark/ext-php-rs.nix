@@ -1,0 +1,21 @@
+[package]
+name = "hello"
+version = "0.1.0"
+edition = "2021"
+description = "A test fixture: hello_world(string $name): string, whose output shows the features it was built with."
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = ["exclaim"]
+exclaim = []
+shout = []
+
+[dependencies]
+ext-php-rs = "=0.16.4"
+
+[profile.release]
+strip = "debuginfo"
