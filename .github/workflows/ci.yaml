@@ -9,6 +9,12 @@ on:
 permissions:
   contents: read
 
+env:
+  # devenv runs a quarter of the CPUs' worth of builds at once: one on GitHub's 3-4 CPU runners.
+  # The PHP headers' configure scripts are single-threaded, so a cold cache built one at a time
+  # takes well over an hour. Run as many builds as there are CPUs (each with one core by default).
+  DEVENV_MAX_JOBS: 4
+
 jobs:
   build:
     name: Build (${{ matrix.runner }})

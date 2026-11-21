@@ -87,7 +87,7 @@
       # cargo build, clippy and rust-analyzer, against nixpkgs' default PHP.
       devShells = forAllSystems (pkgs: {
         default = pkgs.rustPhpPlatform.mkShell {
-          php = pkgs.php;
+          inherit (pkgs) php;
           toolchain = pkgs.rust-bin.stable.latest.default.override {
             extensions = [
               "rust-src"
