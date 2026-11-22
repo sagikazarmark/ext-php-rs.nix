@@ -35,10 +35,12 @@ let
     (php.override (old: {
       packageOverrides = lib.composeExtensions (old.packageOverrides or (_: _: { })) (
         phpFinal: phpPrev: {
-          # `php`'s extensions, with those of overlays before this one, and these.
+          # The extensions of the PHP being built, with those of overlays before this one (their
+          # packageOverrides, composed above), and these. Not `php.extensions`: those are built
+          # against `php` as it is now, and a PHP overridden later (php.override { ztsSupport =
+          # true; }, as frankenphp does) would get them instead of its own.
           extensions =
             phpPrev.extensions
-            // php.extensions
             // extensionsFor {
               pkgs = final;
               # The PHP without extensions, which the one with them is built from.

@@ -50,6 +50,8 @@ After changing either, run `update-docs` and commit the result: the `docs` check
   and with nixpkgs' Rust through the overlay.
 - The example's `.phpt` tests (the template's, run with `runPhpTests`) through
   `php.withExtensions`, and through `mkPhpExtensionsOverlay` by name.
+- On Linux: `mkPhpExtensionsOverlay` with a PHP that's overridden after it (FrankenPHP's ZTS PHP),
+  which must rebuild nixpkgs' extensions and the overlay's for itself and start without a warning.
 - The overlay: native builds with nixpkgs' Rust, portable builds refused without rust-overlay's
   overlay and built with its toolchain alongside it.
 - On x86_64 Linux: the example built with `pkgsCross` for aarch64 Linux, loaded into that

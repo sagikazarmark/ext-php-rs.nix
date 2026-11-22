@@ -380,6 +380,30 @@ lib.listToAttrs (
       withOverlay.php85.withExtensions ({ enabled, all }: enabled ++ [ all.hello ])
     );
 }
+// lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+  # A PHP overridden after the overlay (php.override { ztsSupport = true; … }: FrankenPHP's,
+  # from the binary cache) rebuilds the overlay's extensions and nixpkgs' for itself: it starts
+  # without a warning (an extension built for PHP without thread safety doesn't load).
+  php-extensions-overlay-zts =
+    let
+      overlay = import ../lib/php-extensions-overlay.nix { inherit lib; } {
+        extensions = [ example.args ];
+      };
+      withOverlay = pkgs.appendOverlays [ overlay ];
+      php = withOverlay.frankenphp.php.withExtensions ({ enabled, all }: enabled ++ [ all.hello ]);
+    in
+    runCommand "ext-php-rs-php-extensions-overlay-zts"
+      {
+        code = ''echo PHP_ZTS, " ", hello_world("ZTS");'';
+        expected = "1 Hello, ZTS!";
+      }
+      ''
+        result=$(${lib.getExe php} -r "$code" 2>&1)
+        echo "$result"
+        [ "$result" = "$expected" ]
+        touch "$out"
+      '';
+}
 # buildRustPackage's build options, which a portable build passes to cargo zigbuild itself:
 # a crate in a subdirectory (buildAndTestSubdir), a debug build (buildType), without the default
 # features (buildNoDefaultFeatures) and with another one (buildFeatures). Each build is loaded
