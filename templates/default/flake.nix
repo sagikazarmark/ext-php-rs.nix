@@ -116,6 +116,22 @@
               concurrently 20 "/?name=Nix"
             '';
           };
+
+          # The extension in PHP-FPM's children (tests/fpm/index.php), which it forks after loading
+          # the extension: across requests, in children it forks to replace the ones that exit
+          # after 5 requests, and after FPM reloads.
+          fpm = pkgs.rustPhpPlatform.runFpmTests {
+            inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) php;
+            src = ./tests/fpm;
+            maxRequests = 5;
+            script = ''
+              expect "/?name=Nix" "Hello, Nix!"
+              concurrently 20 "/?name=Nix"
+              reload
+              expect "/?name=reload" "Hello, reload!"
+              concurrently 20 "/?name=Nix"
+            '';
+          };
         }
       );
 

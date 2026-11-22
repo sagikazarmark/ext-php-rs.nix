@@ -53,6 +53,8 @@ After changing either, run `update-docs` and commit the result: the `docs` check
   `php.withExtensions`, and through `mkPhpExtensionsOverlay` by name.
 - `mkPhpExtensionsOverlay` with a PHP that's overridden after it (FrankenPHP's ZTS PHP),
   which must rebuild nixpkgs' extensions and the overlay's for itself and start without a warning.
+- `runFpmTests` failing when a child of FPM crashes, though FPM replaces it and the test's
+  requests succeed.
 - The overlay: native builds with nixpkgs' Rust, portable builds refused without rust-overlay's
   overlay and built with its toolchain alongside it.
 - On x86_64 Linux: the example built with `pkgsCross` for aarch64 Linux, loaded into that
@@ -69,7 +71,8 @@ After changing either, run `update-docs` and commit the result: the `docs` check
   check names every test that fails).
 - The template's flake, with this flake as its `ext-php-rs` input: its checks (its `.phpt` tests,
   with the extension through its overlay, in PHP 8.4, 8.5 and 8.6 and with FrankenPHP's ZTS PHP,
-  and its FrankenPHP worker test with `runFrankenphpTests`), its package and shell, and
+  its FrankenPHP worker test with `runFrankenphpTests`, and its PHP-FPM test with
+  `runFpmTests`), its package and shell, and
   the evaluation of its 36 PIE archives.
 - The generated docs are up to date.
 - Real extensions ([`tests/real-world.nix`](tests/real-world.nix)), described below.

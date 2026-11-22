@@ -406,6 +406,32 @@ lib.listToAttrs (
         touch "$out"
       '';
 
+  # runFpmTests fails when a child of FPM crashes, though FPM forks another and the test's
+  # requests succeed: here after it sent the last response, as a crash in MSHUTDOWN would.
+  fpm-child-crash =
+    let
+      failure = pkgs.testers.testBuildFailure (
+        rustPhpPlatform.runFpmTests {
+          name = "fpm-child-crash";
+          php = php84;
+          src = pkgs.writeTextDir "index.php" ''
+            <?php
+            echo 'ok';
+            fastcgi_finish_request();
+            usleep(500000);
+            posix_kill(getmypid(), SIGSEGV);
+          '';
+          script = ''
+            expect / ok
+          '';
+        }
+      );
+    in
+    runCommand "ext-php-rs-fpm-child-crash" { } ''
+      grep -q 'runFpmTests: a child of FPM crashed' ${failure}/testBuildFailure.log
+      touch "$out"
+    '';
+
   # A PHP overridden after the overlay (php.override { ztsSupport = true; … }: FrankenPHP's,
   # from the binary cache) rebuilds the overlay's extensions and nixpkgs' for itself: it starts
   # without a warning (an extension built for PHP without thread safety doesn't load).
