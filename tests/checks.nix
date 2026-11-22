@@ -381,10 +381,11 @@ lib.listToAttrs (
     );
 
   # loadPieArchives' command, without Docker (CI's load jobs run its script with it): it finds
-  # its helpers, selects archives by name (none here: one for another CPU, one for macOS), and
-  # refuses an unknown option.
+  # its helpers, selects archives by name (none here: one for another CPU, one for macOS on
+  # this one), and refuses an unknown option.
   load-pie-archives =
     let
+      this = if pkgs.stdenv.hostPlatform.isAarch64 then "arm64" else "x86_64";
       other = if pkgs.stdenv.hostPlatform.isAarch64 then "x86_64" else "arm64";
     in
     runCommand "ext-php-rs-load-pie-archives"
@@ -392,7 +393,7 @@ lib.listToAttrs (
       ''
         mkdir archives tests
         touch archives/php_hello-0.1.0_php8.4-${other}-linux-glibc-nts.tgz
-        touch archives/php_hello-0.1.0_php8.4-aarch64-darwin-bsdlibc-nts.tgz
+        touch archives/php_hello-0.1.0_php8.4-${this}-darwin-bsdlibc-nts.tgz
         status=0
         load-pie-archives archives tests 2> err || status=$?
         cat err
