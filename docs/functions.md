@@ -20,6 +20,7 @@ devenv module as `config.ext-php-rs.lib`.
   - [`rustPhpPlatform.mkPieRelease`](#rustphpplatformmkpierelease)
   - [`rustPhpPlatform.runPhpTests`](#rustphpplatformrunphptests)
   - [`rustPhpPlatform.runFrankenphpTests`](#rustphpplatformrunfrankenphptests)
+  - [`rustPhpPlatform.runFpmTests`](#rustphpplatformrunfpmtests)
   - [`rustPhpPlatform.loadPieArchives`](#rustphpplatformloadpiearchives)
   - [`rustPhpPlatform.mkShell`](#rustphpplatformmkshell)
   - [`rustPhpPlatform.targets`](#rustphpplatformtargets)
@@ -377,6 +378,65 @@ checks.frankenphp = rustPhpPlatform.runFrankenphpTests {
     restart_workers
     expect "/?name=Nix" "Hello, Nix!"
     concurrently 20 "/?name=Nix"
+  '';
+};
+```
+
+### `rustPhpPlatform.runFpmTests`
+
+Runs PHP-FPM, behind Caddy, and a test against it, as a check: an extension used the way
+FPM uses it, which `.phpt` tests with the CLI don't. FPM's master loads the extensions
+(`MINIT`) and then forks the children that handle requests. The threads an extension starts
+in `MINIT` (a Tokio runtime's, say) aren't in the children, every child shares the
+connections it opened, and each child shuts the module down (`MSHUTDOWN`) itself when it
+exits. Each child also handles many requests, one after another.
+
+FPM runs with `pm = static`: all `children` from the start, each exiting after
+`maxRequests` requests (`pm.max_requests`) if that isn't 0, when FPM forks another. Caddy
+serves `src` on a free port on 127.0.0.1 (which the sandbox allows, on macOS too), sending
+PHP scripts (and every path without a file, to `index.php`) to FPM, and the test is a bash
+script (`set -euo pipefail`) with:
+- `get`, `expect` and `concurrently`, as in
+  [`runFrankenphpTests`](#rustphpplatformrunfrankenphptests)
+- `reload`: reloads FPM (`SIGUSR2`, as `systemctl reload php-fpm` does): the children exit,
+  and the master runs itself again, loading the extensions again, and forks new children.
+  It returns once they're ready.
+- `$url`: the server's address; `$fpm_pid` and `$fpm_log`: FPM's master and its log
+
+The check fails if PHP warns when it starts (an extension that doesn't load), if the test
+fails, if a child of FPM crashes (FPM starts another, so a request fails at most) or exits
+with an error, or if FPM exits during the test or doesn't stop cleanly afterwards, with
+FPM's, PHP's and Caddy's logs. FPM logs how a child exited only while it runs, not when it
+reloads or stops: set `maxRequests` to check the module's shutdown in the children.
+
+#### Inputs
+
+- `php`: The PHP whose FPM runs.
+- `extensions`: Extensions to load, through `php.withExtensions`. Default: `[ ]`.
+- `src`: The document root.
+- `script`: The test.
+- `children`: The number of children (`pm.max_children`). Default: `2`.
+- `maxRequests`: The requests each child handles before it exits (`pm.max_requests`), or
+  `0` for no limit. Default: `0`.
+- `settings`: More pool settings, such as `{ "php_admin_value[memory_limit]" = "256M"; }`.
+  Default: `{ }`.
+- `name`: Default: `"fpm-tests"`.
+
+#### Example
+
+```nix
+checks.fpm = rustPhpPlatform.runFpmTests {
+  php = pkgs.php84;
+  extensions = [ hello ];
+  # index.php: echo hello_world($_GET["name"]);
+  src = ./tests/fpm;
+  # Each child exits after 5 requests, and FPM forks another.
+  maxRequests = 5;
+  script = ''
+    expect "/?name=Nix" "Hello, Nix!"
+    concurrently 20 "/?name=Nix"
+    reload
+    expect "/?name=Nix" "Hello, Nix!"
   '';
 };
 ```

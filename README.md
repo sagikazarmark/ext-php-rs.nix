@@ -117,13 +117,18 @@ In devenv, add the flake to `devenv.yaml` with `overlays: [ default ]`, then use
 
 ### Testing
 
-These two run in the Nix sandbox as checks, without Docker:
+These three run in the Nix sandbox as checks, without Docker:
 
 - `runPhpTests` runs `.phpt` tests with PHP's `run-tests.php`, with the extensions loaded.
 - `runFrankenphpTests` starts a [FrankenPHP](https://frankenphp.dev) and runs a test script
   against it. The script can send requests, send them concurrently, and restart workers. These
   cover what CLI tests can't: threads, a worker that stays loaded across requests, and module
   restarts.
+- `runFpmTests` does the same with PHP-FPM behind Caddy. Its script can also reload FPM. This
+  covers forking: FPM's master starts the extension (`MINIT`), then forks the children that
+  handle requests, which don't have the threads it started. Each child handles many requests,
+  then shuts the module down itself. The check fails if a child crashes, even though FPM
+  replaces it and later requests succeed.
 
 `loadPieArchives` is a command for the archives users install: it loads a PIE release's Linux
 archives into PHP's official Docker images (`php:8.4-zts-alpine`, …) and runs the `.phpt` tests
@@ -143,6 +148,23 @@ checks.frankenphp = rustPhpPlatform.runFrankenphpTests {
     restart_workers
     expect "/?name=Nix" "Hello, Nix!"
     concurrently 20 "/?name=Nix"
+  '';
+};
+```
+
+FPM forks every child from the same master. To test children that FPM replaces, set
+`maxRequests` so each one exits after that many requests:
+
+```nix
+checks.fpm = rustPhpPlatform.runFpmTests {
+  php = pkgs.php.withExtensions ({ enabled, all }: enabled ++ [ all.hello ]);
+  src = ./tests/fpm; # index.php: echo hello_world($_GET["name"]);
+  maxRequests = 5;
+  script = ''
+    expect "/?name=Nix" "Hello, Nix!"
+    concurrently 20 "/?name=Nix"
+    reload
+    expect "/?name=Nix" "Hello, Nix!"
   '';
 };
 ```
