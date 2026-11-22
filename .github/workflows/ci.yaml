@@ -19,7 +19,9 @@ jobs:
   build:
     name: Build (${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+    # A change to every portable build (a pull request, which does not push to the cache)
+    # rebuilds them all: over an hour on macOS.
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
