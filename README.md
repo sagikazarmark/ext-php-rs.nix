@@ -117,13 +117,17 @@ In devenv, add the flake to `devenv.yaml` with `overlays: [ default ]`, then use
 
 ### Testing
 
-Each of these runs in the Nix sandbox as a check, without Docker:
+These two run in the Nix sandbox as checks, without Docker:
 
 - `runPhpTests` runs `.phpt` tests with PHP's `run-tests.php`, with the extensions loaded.
 - `runFrankenphpTests` starts a [FrankenPHP](https://frankenphp.dev) and runs a test script
   against it. The script can send requests, send them concurrently, and restart workers. These
   cover what CLI tests can't: threads, a worker that stays loaded across requests, and module
   restarts.
+
+`loadPieArchives` is a command for the archives users install: it loads a PIE release's Linux
+archives into PHP's official Docker images (`php:8.4-zts-alpine`, …) and runs the `.phpt` tests
+there (`load-pie-archives [--php 8.4] [--ts zts] [--libc musl] <archives> <tests>`).
 
 FrankenPHP's PHP is thread-safe (ZTS), so extensions must be built for it. With the extension's
 overlay applied, nixpkgs' `frankenphp` rebuilds them itself:

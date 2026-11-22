@@ -115,7 +115,7 @@ jobs:
           path: dist
 
       - name: Load and test
-        run: bash tests/load.sh dist "${{ matrix.php }}" "${{ matrix.ts }}" "${{ matrix.arch }}" "${{ matrix.libc }}"
+        run: bash lib/load-pie-archives.sh --php "${{ matrix.php }}" --ts "${{ matrix.ts }}" --arch "${{ matrix.arch }}" --libc "${{ matrix.libc }}" dist dist/tests
 
       - name: Install with PIE and test
         run: bash tests/pie.sh dist "${{ matrix.php }}" "${{ matrix.ts }}" "${{ matrix.arch }}" "${{ matrix.libc }}"

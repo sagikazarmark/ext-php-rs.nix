@@ -20,8 +20,9 @@ follows its nixpkgs, so what CI builds and caches is what projects using the fla
   - `real-world.nix`: the real-world extensions, and `real-world/`: `.phpt` tests for those whose
     releases have none.
   - `fixtures/features/`: a crate whose output shows the Cargo features it was built with.
-  - The scripts that load archives (`load.sh`, `load-macos.sh`) and install them with PIE
-    (`pie.sh`, `pie-api.py`), which share `lib.sh`.
+  - The scripts that load macOS archives (`load-macos.sh`) and install Linux ones with PIE
+    (`pie.sh`, `pie-api.py`). They share `lib/load-lib.sh` with `lib/load-pie-archives.sh`
+    (`loadPieArchives`), which loads Linux archives.
 
 ## Commands
 
@@ -95,10 +96,11 @@ workspace, and `.cargo/config.toml` linker settings.
 extensions'), each extension's `.phpt` tests (`tests/<name>/`), PIE (1.5.5), and PHP's
 `run-tests.php`. With it:
 
-- **`tests/load.sh <dir> <php minor> <nts|zts> <x86_64|arm64> <glibc|musl>`** loads that PHP's
+- **`lib/load-pie-archives.sh --php <minor> --ts <nts|zts> --arch <x86_64|arm64> --libc
+  <glibc|musl> <dir> <dir>/tests`** (`loadPieArchives`, which projects use too) loads that PHP's
   Linux archives into its official image and runs their `.phpt` tests there with the image's
-  `run-tests.php`, the module loaded alone (`-n`). It needs Docker; Docker Desktop emulates the
-  other CPU.
+  `run-tests.php`, the module loaded alone (`-n`). It needs Docker (or `DOCKER=podman`); Docker
+  Desktop emulates the other CPU.
 - **`tests/pie.sh <dir> <php minor> <nts|zts> <x86_64|arm64> <glibc|musl>`** installs them with
   `pie install` instead, then runs the `.phpt` tests with the php.ini PIE leaves. PIE looks for
   pre-packaged binaries through GitHub's API: `tests/pie-api.py` stands in for it, with a

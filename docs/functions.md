@@ -20,6 +20,7 @@ devenv module as `config.ext-php-rs.lib`.
   - [`rustPhpPlatform.mkPieRelease`](#rustphpplatformmkpierelease)
   - [`rustPhpPlatform.runPhpTests`](#rustphpplatformrunphptests)
   - [`rustPhpPlatform.runFrankenphpTests`](#rustphpplatformrunfrankenphptests)
+  - [`rustPhpPlatform.loadPieArchives`](#rustphpplatformloadpiearchives)
   - [`rustPhpPlatform.mkShell`](#rustphpplatformmkshell)
   - [`rustPhpPlatform.targets`](#rustphpplatformtargets)
   - [`rustPhpPlatform.mkTarget`](#rustphpplatformmktarget)
@@ -377,6 +378,37 @@ checks.frankenphp = rustPhpPlatform.runFrankenphpTests {
     concurrently 20 "/?name=Nix"
   '';
 };
+```
+
+### `rustPhpPlatform.loadPieArchives`
+
+A command (`load-pie-archives`, not a check: it needs Docker) that loads a PIE release's
+Linux archives into PHP's official Docker images and runs `.phpt` tests there. Each archive
+goes into the image of its PHP version, thread safety, CPU and C library (`php:8.4-zts-alpine`
+for `…_php8.4-x86_64-linux-musl-zts.tgz`), and the tests run with the image's
+`run-tests.php`, with the module loaded alone (`php -n`). This tests the archives users
+install, in a PHP that isn't Nix's.
+
+```
+load-pie-archives [--php <minor>] [--ts <nts|zts>] [--libc <glibc|musl>]
+                  [--arch <x86_64|arm64>] <archives> <tests>
+```
+
+- `<archives>`: A directory of PIE archives, such as [`mkPieRelease`](#rustphpplatformmkpierelease)'s.
+- `<tests>`: The `.phpt` tests: `<tests>/<extension>` if it exists (for archives of several
+  extensions), otherwise `<tests>`.
+- The options select the archives. `--arch` is this machine's CPU by default; another
+  needs emulation (Docker Desktop's, or QEMU's binfmt handlers).
+
+`DOCKER` is the command to run: `docker` by default, `podman` works too. PHP 8.6's official
+images are ZTS only, so its NTS archives are skipped. It fails if an archive's tests fail,
+or if no archive is selected.
+
+#### Example
+
+```nix
+# nix build .#pie && nix run .#load-test -- --php 8.4 result tests
+packages.load-test = rustPhpPlatform.loadPieArchives;
 ```
 
 ### `rustPhpPlatform.mkShell`

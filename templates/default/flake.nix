@@ -75,6 +75,10 @@
             pkgs.php86
           ];
         };
+
+        # Loads the Linux archives for this machine's CPU into PHP's official Docker images and
+        # runs tests/*.phpt there: `nix build .#pie && nix run .#load-test -- result tests`.
+        load-test = pkgs.rustPhpPlatform.loadPieArchives;
       });
 
       checks = forAllSystems (

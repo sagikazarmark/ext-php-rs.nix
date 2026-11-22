@@ -12,8 +12,8 @@ if [ $# -ne 1 ]; then
   exit 2
 fi
 dir=$(cd "$1" && pwd)
-# shellcheck source=tests/lib.sh
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=lib/load-lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/load-lib.sh"
 
 php=$(php -n -r 'echo PHP_MAJOR_VERSION, ".", PHP_MINOR_VERSION;')
 ts=$(php -n -r 'echo PHP_ZTS ? "zts" : "nts";')

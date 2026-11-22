@@ -379,6 +379,31 @@ lib.listToAttrs (
     exampleTests "php-extensions-overlay" (
       withOverlay.php85.withExtensions ({ enabled, all }: enabled ++ [ all.hello ])
     );
+
+  # loadPieArchives' command, without Docker (CI's load jobs run its script with it): it finds
+  # its helpers, selects archives by name (none here: one for another CPU, one for macOS), and
+  # refuses an unknown option.
+  load-pie-archives =
+    let
+      other = if pkgs.stdenv.hostPlatform.isAarch64 then "x86_64" else "arm64";
+    in
+    runCommand "ext-php-rs-load-pie-archives"
+      { nativeBuildInputs = [ rustPhpPlatform.loadPieArchives ]; }
+      ''
+        mkdir archives tests
+        touch archives/php_hello-0.1.0_php8.4-${other}-linux-glibc-nts.tgz
+        touch archives/php_hello-0.1.0_php8.4-aarch64-darwin-bsdlibc-nts.tgz
+        status=0
+        load-pie-archives archives tests 2> err || status=$?
+        cat err
+        [ "$status" -eq 1 ]
+        grep -q 'no Linux .* archives' err
+        status=0
+        load-pie-archives --bogus archives tests 2> err || status=$?
+        [ "$status" -eq 2 ]
+        grep -q 'unknown option --bogus' err
+        touch "$out"
+      '';
 }
 // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
   # A PHP overridden after the overlay (php.override { ztsSupport = true; … }: FrankenPHP's,
