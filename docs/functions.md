@@ -1,0 +1,435 @@
+# Functions
+
+<!-- Generated from the doc comments in lib/: run `update-docs` (devenv) after changing them. -->
+
+The flake's [`lib`](#ext-php-rslib) output has the functions that need no package set, and
+`makeRustPhpPlatform`, which makes the [`rustPhpPlatform`](#rustphpplatform) scope of
+functions for a package set. The overlay adds that scope as `pkgs.rustPhpPlatform`, and the
+devenv module as `config.ext-php-rs.lib`.
+
+- `ext-php-rs.lib`
+  - [`ext-php-rs.lib.makeRustPhpPlatform`](#ext-php-rslibmakerustphpplatform)
+  - [`ext-php-rs.lib.targets`](#ext-php-rslibtargets)
+  - [`ext-php-rs.lib.mkTarget`](#ext-php-rslibmktarget)
+  - [`ext-php-rs.lib.extensionArgs`](#ext-php-rslibextensionargs)
+  - [`ext-php-rs.lib.mkPhpExtensionsOverlay`](#ext-php-rslibmkphpextensionsoverlay)
+- `rustPhpPlatform`
+  - [`rustPhpPlatform.buildRustPhpExtension`](#rustphpplatformbuildrustphpextension)
+  - [`rustPhpPlatform.extensionArgs`](#rustphpplatformextensionargs)
+  - [`rustPhpPlatform.buildPieRelease`](#rustphpplatformbuildpierelease)
+  - [`rustPhpPlatform.mkPieRelease`](#rustphpplatformmkpierelease)
+  - [`rustPhpPlatform.runPhpTests`](#rustphpplatformrunphptests)
+  - [`rustPhpPlatform.mkShell`](#rustphpplatformmkshell)
+  - [`rustPhpPlatform.targets`](#rustphpplatformtargets)
+  - [`rustPhpPlatform.mkTarget`](#rustphpplatformmktarget)
+  - [`rustPhpPlatform.mkPieArchive`](#rustphpplatformmkpiearchive)
+  - [`rustPhpPlatform.pieAssetName`](#rustphpplatformpieassetname)
+  - [`rustPhpPlatform.mkPhpHeaders`](#rustphpplatformmkphpheaders)
+  - [`rustPhpPlatform.rustToolchain`](#rustphpplatformrusttoolchain)
+  - [`rustPhpPlatform.rustToolchainFor`](#rustphpplatformrusttoolchainfor)
+  - [`rustPhpPlatform.rustPlatform`](#rustphpplatformrustplatform)
+  - [`rustPhpPlatform.zigLibclang`](#rustphpplatformziglibclang)
+  - [`rustPhpPlatform.cargo-zigbuild`](#rustphpplatformcargo-zigbuild)
+  - [`rustPhpPlatform.macosSdk`](#rustphpplatformmacossdk)
+
+## `ext-php-rs.lib`
+The flake's `lib` output: functions that don't need a package set, and `makeRustPhpPlatform`,
+which makes the [`rustPhpPlatform` scope](#rustphpplatform) for one.
+
+### `ext-php-rs.lib.makeRustPhpPlatform`
+
+Makes the [`rustPhpPlatform` scope](#rustphpplatform) for a package set: the same as
+`pkgs.callPackage ./lib { … }`.
+
+#### Inputs
+
+- `pkgs`: The package set to build with and for.
+- `rustToolchain`: The Rust toolchain (rustc and cargo). Default: nixpkgs' rustc and cargo. Portable builds
+  need each target's standard library: a rust-overlay toolchain gets it added
+  automatically, any other toolchain must already have it.
+- `zig`: The zig that portable builds compile and link with. Default: `pkgs.zig`. It must be a zig
+  from nixpkgs, whose build inputs include the libclang of its LLVM.
+
+#### Example
+
+```nix
+rustPhpPlatform = ext-php-rs.lib.makeRustPhpPlatform {
+  inherit pkgs;
+  rustToolchain = (rust-overlay.lib.mkRustBin { } pkgs).stable.latest.minimal;
+};
+```
+
+### `ext-php-rs.lib.targets`
+
+The common targets: the same as
+[`rustPhpPlatform.targets`](#rustphpplatformtargets).
+
+### `ext-php-rs.lib.mkTarget`
+
+Makes a target: the same as [`rustPhpPlatform.mkTarget`](#rustphpplatformmktarget).
+
+### `ext-php-rs.lib.extensionArgs`
+
+Reads `buildRustPhpExtension`'s arguments from a project's files: the same as
+[`rustPhpPlatform.extensionArgs`](#rustphpplatformextensionargs).
+
+### `ext-php-rs.lib.mkPhpExtensionsOverlay`
+
+Makes an overlay that adds extensions to every PHP of nixpkgs (`php`, `php84`, `php85`, …),
+the way nixpkgs adds its own: to `php.extensions`. Each extension is built against the PHP
+that loads it, and users load it like one of nixpkgs':
+- `php.withExtensions ({ enabled, all }: enabled ++ [ all.<name> ])`
+- devenv: `languages.php.extensions = [ "<name>" ];`
+
+The overlay doesn't rebuild PHP, and several such overlays combine.
+
+#### Inputs
+
+- `extensions`: Either a list of `buildRustPhpExtension`'s arguments (without `php`), each added under
+  its `extensionName`; or a function from `{ pkgs, php, rustPhpPlatform }` to an attribute
+  set of extensions built against `php`.
+- `rustPhpPlatform`: A function from the package set to the `rustPhpPlatform` to build with. Default:
+  `pkgs.callPackage ./lib { }`, with nixpkgs' Rust.
+
+#### Examples
+
+```nix
+overlays.default = ext-php-rs.lib.mkPhpExtensionsOverlay {
+  extensions = [ (ext-php-rs.lib.extensionArgs { root = ./.; }) ];
+};
+```
+
+```nix
+overlays.default = ext-php-rs.lib.mkPhpExtensionsOverlay {
+  extensions = { php, rustPhpPlatform, ... }: {
+    hello = rustPhpPlatform.buildRustPhpExtension {
+      pname = "hello";
+      version = "0.1.0";
+      src = ./.;
+      cargoLock.lockFile = ./Cargo.lock;
+      inherit php;
+    };
+  };
+};
+```
+
+
+## `rustPhpPlatform`
+The functions for one package set, and the tools they build with. Get it with
+[`ext-php-rs.lib.makeRustPhpPlatform`](#ext-php-rslibmakerustphpplatform), from the overlay
+(`pkgs.rustPhpPlatform`), or with `pkgs.callPackage ./lib { … }`.
+
+It's a scope (`lib.makeScope`): change any of its attributes, such as `rustToolchain`,
+with `rustPhpPlatform.overrideScope (final: prev: { … })`.
+
+### Inputs
+
+- `rustToolchain`: The Rust toolchain (rustc and cargo). Default: nixpkgs' rustc and cargo. Portable builds
+  need each target's standard library: rust-overlay's toolchains get it added
+  automatically, any other toolchain must already have it. With nixpkgs' Rust, portable
+  builds use rust-overlay's latest stable toolchain if its overlay is applied (`pkgs.rust-bin`),
+  and native builds keep nixpkgs' Rust.
+- `zig`: The zig that portable builds compile and link with. Default: `pkgs.zig`.
+
+### `rustPhpPlatform.buildRustPhpExtension`
+
+Builds a PHP extension written in Rust with ext-php-rs. It extends the scope's
+`rustPlatform.buildRustPackage`, and takes its arguments too.
+
+- **Without a `target`**, it builds the way `buildRustPackage` does, for the package set's
+  host platform and against `php`: a package for `php.withExtensions`. From
+  `pkgsCross.<platform>.callPackage`, that's another Nix platform's PHP.
+- **With a `target`**, it's a portable build: cross-compiled from any platform, it loads
+  in any PHP of that target and thread safety, not only Nix's. See
+  [How a portable build works](portable-builds.md).
+
+The derivation is named `php-<pname>-<version>`, as nixpkgs names its PHP extensions.
+
+#### Inputs
+
+- `php`: The PHP to build against. With a `target`, only its version matters: the build uses
+  that version's headers, configured for the target.
+- `target`: For a portable build, a target from [`targets`](#rustphpplatformtargets) or
+  [`mkTarget`](#rustphpplatformmktarget). This is a compile target for Cargo, not Nix's
+  `targetPlatform`.
+- `zts`: For a portable build, whether to build for a thread-safe (ZTS) PHP. Without a target,
+  `php`'s own thread safety is used.
+- `pname`, `version`, `src`: As for `buildRustPackage`.
+- `cargoHash`, `cargoLock` or `cargoDeps`: The Cargo dependencies, as for `buildRustPackage`.
+- `cargoPackage`: The Cargo package to build. Default: `pname`.
+- `extensionName`: The PHP module's name, as `extension=` loads it. Default: `cargoPackage`.
+- `libName`: The cdylib's name (`[lib] name` in `Cargo.toml`). Default: `cargoPackage`, with `-`
+  replaced by `_`.
+- `allowedLibraries`: For a portable build, the shared libraries the module may link to. Default: the
+  target's C library (on macOS, the system's libraries and frameworks).
+
+Other arguments are `buildRustPackage`'s: `buildType` (`"release"` or `"debug"`),
+`buildFeatures`, `buildNoDefaultFeatures`, `buildAndTestSubdir`, `cargoBuildFlags`, …
+Its tests are off (`doCheck = false`): a module's tests need PHP's embed SAPI.
+
+#### Output
+
+- `lib/php/extensions/<extensionName>.so`: the module.
+- `share/ext-php-rs/bindings.rs`: the Zend API as bindgen generated it, to compare
+  builds against other headers.
+- `passthru`: `extensionName`, `phpVersion`, `zts`, `target` and `headers`.
+
+The builds set the rustflags an ext-php-rs module needs (`-undefined dynamic_lookup` on
+macOS, no static C library on musl), on top of a project's own `.cargo/config.toml`.
+
+#### Install check
+
+Without a target, the module is loaded into `php`. With one, the check reads the module:
+it may only need the C library (on macOS, the system's libraries and frameworks), no glibc
+symbol newer than the target's floor and no newer macOS than its minimum. It's also loaded
+into `php` when `php` is of the target's platform (OS, CPU, C library and thread safety).
+
+#### Examples
+
+```nix
+# For php.withExtensions ({ enabled, ... }: enabled ++ [ hello ]).
+hello = rustPhpPlatform.buildRustPhpExtension {
+  pname = "hello";
+  version = "0.1.0";
+  src = ./.;
+  cargoLock.lockFile = ./Cargo.lock;
+  php = pkgs.php84;
+};
+```
+
+```nix
+# For PHP 8.4 ZTS on Linux arm64 with musl, built on any platform.
+hello-musl = rustPhpPlatform.buildRustPhpExtension {
+  # …
+  php = pkgs.php84;
+  target = rustPhpPlatform.targets.aarch64-linux-musl;
+  zts = true;
+};
+```
+
+### `rustPhpPlatform.extensionArgs`
+
+Reads `buildRustPhpExtension`'s arguments from a project's files:
+- `pname` and `version`: from `Cargo.toml`'s `[package]` (a version inherited from the
+  workspace too).
+- `extensionName`: `composer.json`'s `php-ext.extension-name`, which PIE names the
+  archives and the module after; without one, the Cargo package's name, which
+  ext-php-rs names the module after.
+- `libName`: `Cargo.toml`'s `[lib] name`, if it has one.
+- `cargoLock.lockFile`: the workspace's `Cargo.lock`.
+- `src`: only what the build reads (`Cargo.toml`, `Cargo.lock`, `src/`, and `build.rs` and
+  `.cargo/` if they exist), so that changing tests, CI or docs rebuilds nothing. For a
+  crate in a workspace, the whole workspace.
+
+Also available as [`ext-php-rs.lib.extensionArgs`](#ext-php-rslibextensionargs), without a package
+set.
+
+#### Inputs
+
+- `root`: The crate's directory, with its `Cargo.toml`.
+- `workspace`: For a crate in a workspace, the workspace's directory: its `[workspace.package]`,
+  `Cargo.lock` and `composer.json`. Default: `root`.
+- `src`: The source to build, for another layout (files the code includes, a narrower
+  workspace).
+
+Any other argument is passed through, and overrides what is read.
+
+#### Examples
+
+```nix
+args = ext-php-rs.lib.extensionArgs { root = ./.; };
+hello = rustPhpPlatform.buildRustPhpExtension (args // { php = pkgs.php84; });
+```
+
+```nix
+args = ext-php-rs.lib.extensionArgs {
+  root = ./crates/hello;
+  workspace = ./.;
+  buildFeatures = [ "tokio" ];
+};
+```
+
+### `rustPhpPlatform.buildPieRelease`
+
+Builds a release of one extension for [PIE](https://github.com/php/pie): `args` built
+for every combination of `php`, `targets` and `threadSafety`, as one
+[`mkPieRelease`](#rustphpplatformmkpierelease).
+
+#### Inputs
+
+- `args`: `buildRustPhpExtension`'s arguments, without `php`, `target` and `zts`.
+- `php`: The PHPs to build for (a list): one archive per PHP minor.
+- `targets`: The targets to build for. Default: every one of [`targets`](#rustphpplatformtargets).
+- `threadSafety`: Default: `[ "nts" "zts" ]`.
+- `name`: The derivation's name. Default: `mkPieRelease`'s.
+
+#### Example
+
+```nix
+# Every target, NTS and ZTS, for PHP 8.4 and 8.5: 24 archives.
+pie = rustPhpPlatform.buildPieRelease {
+  args = ext-php-rs.lib.extensionArgs { root = ./.; };
+  php = [ pkgs.php84 pkgs.php85 ];
+};
+```
+
+### `rustPhpPlatform.mkPieRelease`
+
+Collects portable builds into a release for [PIE](https://github.com/php/pie): a
+directory with one archive per extension, each with its `.sha256` file, and `SHA256SUMS`.
+The archives are named the way `pie install` looks for them among a GitHub release's
+assets, such as `php_hello-0.1.0_php8.4-arm64-linux-musl-zts.tgz`.
+
+`passthru.archives` has each archive's derivation.
+
+#### Inputs
+
+- `extensions`: Extensions built with a `target`. Each combination of PHP minor, target and thread
+  safety may appear only once.
+- `name`: The derivation's name. Default: `php-<pname>-<version>-pie`, which needs every
+  extension to be of the same package and version.
+
+#### Example
+
+```nix
+pie = rustPhpPlatform.mkPieRelease { extensions = [ hello-musl hello-darwin ]; };
+```
+
+### `rustPhpPlatform.runPhpTests`
+
+Runs `.phpt` tests ([PHP's test format](https://php.github.io/php-src/miscellaneous/writing-tests.html))
+with PHP's `run-tests.php`, as a check. It fails with the diff of each failing test, or
+if `src` has no `.phpt` files.
+
+#### Inputs
+
+- `php`: The PHP to run the tests with.
+- `extensions`: Extensions to load, through `php.withExtensions`. Default: `[ ]`.
+- `src`: The directory with the `.phpt` files, in subdirectories too.
+- `flags`: More arguments for `run-tests.php`. Default: `[ ]`.
+- `name`: Default: `"php-tests"`.
+
+#### Example
+
+```nix
+checks.tests = rustPhpPlatform.runPhpTests {
+  php = pkgs.php84;
+  extensions = [ hello ];
+  src = ./tests;
+};
+```
+
+### `rustPhpPlatform.mkShell`
+
+`mkShell` for `cargo build` (and clippy, rust-analyzer, …) in an ext-php-rs project,
+against a PHP from nixpkgs: it has `php` and its `php-config`, which ext-php-rs's build
+script runs, and the libclang bindgen needs.
+
+A module built by `cargo build` on macOS needs `-undefined dynamic_lookup`. Put it in
+`.cargo/config.toml`, as the template does (`buildRustPhpExtension` sets it itself).
+
+#### Inputs
+
+- `php`: The PHP to build against.
+- `toolchain`: The Rust toolchain, with the components wanted (rust-overlay's
+  `.override { extensions = [ … ]; }`). Default: the scope's `rustToolchain`.
+
+Other arguments are `mkShell`'s.
+
+#### Example
+
+```nix
+devShells.default = rustPhpPlatform.mkShell { php = pkgs.php84; };
+```
+
+### `rustPhpPlatform.targets`
+
+The common targets, one per OS, CPU and C library:
+- `x86_64-linux-glibc`, `aarch64-linux-glibc`: glibc 2.28 or later
+- `x86_64-linux-musl`, `aarch64-linux-musl`
+- `x86_64-darwin`, `aarch64-darwin`: macOS 11.0 or later
+
+[`mkTarget`](#rustphpplatformmktarget) makes others.
+
+### `rustPhpPlatform.mkTarget`
+
+Makes a target, for another glibc floor or minimum macOS.
+
+PIE names archives by OS, CPU and C library only, so a release can have only one target
+of each: a custom target replaces the default one with the same OS, CPU and C library.
+
+#### Inputs
+
+- `arch`: `"x86_64"` or `"aarch64"`.
+- `os`: `"linux"` or `"darwin"`. Default: `"linux"`.
+- `libc`: `"glibc"` or `"musl"` on Linux, `"bsdlibc"` on macOS. Default: `"glibc"` on Linux.
+- `glibc`: The oldest glibc the module loads on. Default: `"2.28"`.
+- `macos`: The oldest macOS the module loads on. Default: `"11.0"`.
+
+#### Example
+
+```nix
+targets = with rustPhpPlatform; [
+  (mkTarget { arch = "x86_64"; glibc = "2.31"; })
+  (mkTarget { arch = "aarch64"; os = "darwin"; macos = "13.0"; })
+  targets.aarch64-linux-musl
+];
+```
+
+### `rustPhpPlatform.mkPieArchive`
+
+Makes one PIE archive and its `.sha256` file, from an extension built with a `target`.
+[`mkPieRelease`](#rustphpplatformmkpierelease) uses it for each extension.
+
+### `rustPhpPlatform.pieAssetName`
+
+The name PIE looks for an extension built with a `target` under:
+`php_<extensionName>-<version>_php<minor>-<arch>-<os>-<libc>-<nts|zts>.tgz`.
+
+### `rustPhpPlatform.mkPhpHeaders`
+
+The headers of a PHP version configured for a target (`./configure` only, nothing is
+compiled), with a `php-config` that runs on the build platform and a stub for `php -i`.
+Portable builds build against them: see [How a portable build works](portable-builds.md).
+
+#### Inputs
+
+- `php`: The PHP whose source to configure.
+- `target`: The target to configure for.
+- `zts`: Whether to configure a thread-safe PHP.
+
+### `rustPhpPlatform.rustToolchain`
+
+The Rust toolchain (rustc and cargo) the scope builds with: the `rustToolchain` input, or
+nixpkgs' rustc and cargo.
+
+### `rustPhpPlatform.rustToolchainFor`
+
+A function from a target to a toolchain with its standard library, for portable builds.
+By default, it adds the target with `rustToolchain.override { targets = [ … ]; }` if the
+toolchain supports it (rust-overlay's do), and otherwise uses `rustToolchain` itself, which
+must then have it. nixpkgs' Rust can't add targets: rust-overlay's latest stable toolchain
+is used instead, if its overlay is applied.
+
+### `rustPhpPlatform.rustPlatform`
+
+The `rustPlatform` that native builds use (`buildRustPhpExtension` without a target):
+nixpkgs' for nixpkgs' Rust, otherwise `makeRustPlatform` with `rustToolchain`.
+
+### `rustPhpPlatform.zigLibclang`
+
+The libclang bindgen uses in portable builds: that of the LLVM zig is built with, found
+among zig's build inputs. zig's builtin headers (`arm_neon.h`, …) only parse with the same
+clang version.
+
+### `rustPhpPlatform.cargo-zigbuild`
+
+cargo-zigbuild with the scope's zig, at least 0.24, which macOS targets need. nixpkgs has
+0.23.4, so this builds 0.24.1 until nixpkgs catches up.
+
+### `rustPhpPlatform.macosSdk`
+
+The macOS SDK that macOS targets build with, from any build platform: nixpkgs'
+`apple-sdk.src` (Apple's Command Line Tools SDK).
+
+

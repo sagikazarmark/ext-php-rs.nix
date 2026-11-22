@@ -1,0 +1,3 @@
+# `name = set.name;` instead of `inherit (set) name;`: nixdoc reads doc comments on bindings,
+# not on inherits (lib/default.nix).
+disabled = [ "manual_inherit_from" ]

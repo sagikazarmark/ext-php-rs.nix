@@ -47,6 +47,7 @@ in
       load-tests
       example
       example-pie
+      docs
       ;
   };
 
@@ -55,6 +56,15 @@ in
   ext-php-rs.extensions.hello = {
     inherit (example) args;
     php = pkgs.php84;
+  };
+
+  scripts.update-docs = {
+    description = "Regenerate docs/functions.md and docs/devenv-options.md";
+    exec = ''
+      set -euo pipefail
+      out=$(devenv build outputs.docs | ${lib.getExe pkgs.jq} -r '."outputs.docs"')
+      cp --no-preserve=mode "$out"/*.md "$DEVENV_ROOT/docs/"
+    '';
   };
 
   scripts.lint = {

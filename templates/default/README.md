@@ -42,7 +42,7 @@ pie install acme/hello
 
 ## Customizing
 
-The flake uses ext-php-rs.nix's defaults wherever it can. Each change below goes where the flake already has the thing it changes. The [ext-php-rs.nix README](https://github.com/sagikazarmark/ext-php-rs.nix#functions) documents every function and argument.
+The flake uses ext-php-rs.nix's defaults wherever it can. Each change below goes where the flake already has the thing it changes. [ext-php-rs.nix's function reference](https://github.com/sagikazarmark/ext-php-rs.nix/blob/main/docs/functions.md) documents every function and argument.
 
 ### PHP versions
 

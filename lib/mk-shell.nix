@@ -1,11 +1,4 @@
-# A shell for `cargo build` (and clippy, rust-analyzer, …) in an ext-php-rs project, against
-# a PHP from nixpkgs: ext-php-rs's build script runs its php and php-config, and bindgen needs
-# libclang. Other arguments are mkShell's.
-#
-#   devShells.default = rustPhpPlatform.mkShell { php = pkgs.php84; };
-#
-# A module that `cargo build` builds on macOS needs `-undefined dynamic_lookup`, which
-# buildRustPhpExtension sets itself: give cargo it in .cargo/config.toml (the template has it).
+# Documented at mkShell in lib/default.nix (docs/functions.md).
 {
   lib,
   mkShell,

@@ -7,6 +7,7 @@
 #   tests in tests/<name>/, PIE to install them with (tests/pie.sh), and PHP's run-tests.php for
 #   a PHP without its own (tests/load-macos.sh)
 # - example, example-pie: the example built for PHP 8.4, and its PIE archives
+# - docs: the generated reference (docs/generate.nix)
 {
   ext-php-rs,
   nixpkgs,
@@ -59,10 +60,11 @@ let
     hello = example.tests;
   };
   archives = [ example-pie ] ++ map rustPhpPlatform.mkPieArchive realWorld.portableBuilds;
+  docs = import ../docs/generate.nix { inherit pkgs; };
 in
 {
   example = example.build php84;
-  inherit example-pie;
+  inherit docs example-pie;
 
   load-tests = pkgs.runCommand "ext-php-rs-load-tests" { } ''
     mkdir "$out"
@@ -134,6 +136,17 @@ in
     # 8.4, 8.5 and 8.6), package and shell, and its release archives: evaluated here, built by the template's CI.
     // lib.mapAttrs' (name: lib.nameValuePair "template-${name}") template.checks.${system}
     // {
+      # docs/ has what docs/generate.nix generates: `update-docs` (devenv) copies it there.
+      docs = pkgs.runCommand "ext-php-rs-docs-up-to-date" { } ''
+        for file in functions.md devenv-options.md; do
+          if ! diff -u ${../docs}/$file ${docs}/$file; then
+            echo "docs/$file is out of date: run update-docs" >&2
+            exit 1
+          fi
+        done
+        touch "$out"
+      '';
+
       template-package = template.packages.${system}.default;
       template-shell = template.devShells.${system}.default;
       template-pie =

@@ -1,23 +1,4 @@
-# buildRustPhpExtension's arguments for a project, read from its files:
-#
-#   args = ext-php-rs.lib.extensionArgs { root = ./.; };
-#   rustPhpPlatform.buildRustPhpExtension (args // { php = pkgs.php84; })
-#
-# - pname and version: Cargo.toml's package (a version inherited from the workspace too)
-# - extensionName: composer.json's php-ext.extension-name, which PIE names the archives and the
-#   module after; without one, the Cargo package's name, which ext-php-rs names the module after
-# - libName: Cargo.toml's [lib] name, when it has one
-# - cargoLock.lockFile: the workspace's Cargo.lock
-# - src: what a single-crate project's build reads (Cargo.toml, Cargo.lock, src/, and build.rs
-#   and .cargo/ where they exist), so that changing anything else (tests, CI, docs) rebuilds
-#   nothing; for a crate in a workspace, the workspace's directory. Pass src for any other
-#   layout (files the code includes, a narrower workspace).
-#
-# For a crate in a workspace, root is the crate's directory and workspace the workspace's:
-#
-#   ext-php-rs.lib.extensionArgs { root = ./crates/hello; workspace = ./.; }
-#
-# Any other argument is passed through, and overrides what is read.
+# Documented at extensionArgs in lib/default.nix (docs/functions.md).
 { lib }:
 
 {

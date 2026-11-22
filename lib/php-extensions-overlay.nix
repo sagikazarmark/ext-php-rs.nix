@@ -1,22 +1,4 @@
-# An overlay that adds extensions to every PHP of nixpkgs (php, php84, php85, …), the way
-# nixpkgs adds its own: to php.extensions, so that
-#
-#   php.withExtensions ({ enabled, all }: enabled ++ [ all.<name> ])
-#
-# and devenv's `languages.php.extensions = [ "<name>" ]` load them, each built against the
-# PHP that loads it. For an extension's flake to publish as overlays.default:
-#
-#   overlays.default = ext-php-rs.lib.mkPhpExtensionsOverlay {
-#     extensions = [ (ext-php-rs.lib.extensionArgs { root = ./.; }) ];
-#   };
-#
-# or, for more than buildRustPhpExtension's arguments:
-#
-#   overlays.default = ext-php-rs.lib.mkPhpExtensionsOverlay {
-#     extensions = { php, rustPhpPlatform, ... }: {
-#       hello = rustPhpPlatform.buildRustPhpExtension { pname = "hello"; …; inherit php; };
-#     };
-#   };
+# Documented at mkPhpExtensionsOverlay in lib/flake-lib.nix (docs/functions.md).
 { lib }:
 
 {

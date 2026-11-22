@@ -1,11 +1,4 @@
-# Runs .phpt tests (https://php.github.io/php-src/miscellaneous/writing-tests.html), PHP's own test format, with PHP's
-# run-tests.php: a check that fails with the diff of every test that fails.
-#
-#   rustPhpPlatform.runPhpTests {
-#     php = pkgs.php84;
-#     extensions = [ hello ];   # loaded with php.withExtensions
-#     src = ./tests;            # the .phpt files, in subdirectories too
-#   }
+# Documented at runPhpTests in lib/default.nix (docs/functions.md).
 {
   lib,
   runCommand,
