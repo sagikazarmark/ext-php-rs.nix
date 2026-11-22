@@ -47,19 +47,26 @@ let
       '';
 
   # Every archive of a release in one directory, with each one's .sha256 file and SHA256SUMS.
+  # Named php-<pname>-<version>-pie, like the extensions (one package at one version, as a
+  # release on PIE is), unless `name` is set.
   mkPieRelease =
     {
-      name,
+      name ? null,
       extensions,
     }:
     let
+      releaseOf = extension: "php-${extension.pname}-${extension.version}";
+      releases = lib.unique (map releaseOf extensions);
       # By name, so the order of `extensions` does not matter.
       archives = lib.sortOn (archive: archive.asset) (map mkPieArchive extensions);
       assets = map (archive: archive.asset) archives;
       duplicates = lib.filter (asset: lib.count (a: a == asset) assets > 1) assets;
     in
+    assert lib.assertMsg (extensions != [ ]) "mkPieRelease: no extensions";
     assert lib.assertMsg (duplicates == [ ]) "mkPieRelease: more than one ${lib.head duplicates}";
-    runCommand name
+    assert lib.assertMsg (name != null || lib.length releases == 1)
+      "mkPieRelease: extensions of more than one package or version (${lib.concatStringsSep ", " releases}): set name";
+    runCommand (if name != null then name else "${lib.head releases}-pie")
       {
         passthru.archives = lib.listToAttrs (
           map (archive: lib.nameValuePair (lib.removeSuffix ".tgz" archive.asset) archive) archives
@@ -108,14 +115,12 @@ let
             target = targets;
             ts = threadSafety;
           };
-      first = lib.head extensions;
     in
     assert lib.assertMsg (
       extensions != [ ]
     ) "buildPieRelease: no PHP, target or thread safety to build for";
     mkPieRelease {
-      name = if name != null then name else "php_${first.extensionName}-${first.version}";
-      inherit extensions;
+      inherit name extensions;
     };
 in
 {

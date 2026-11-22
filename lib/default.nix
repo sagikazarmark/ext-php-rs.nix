@@ -13,7 +13,7 @@
 #
 #   # Every archive PIE can download, in one directory: from built extensions, or built for
 #   # every PHP, target and thread safety.
-#   rustPhpPlatform.mkPieRelease { name; extensions = [ … ]; }
+#   rustPhpPlatform.mkPieRelease { extensions = [ … ]; }
 #   rustPhpPlatform.buildPieRelease { args = { pname; version; src; cargoLock.lockFile; }; php = [ pkgs.php84 pkgs.php85 ]; }
 #
 #   # The arguments from the project's Cargo.toml and composer.json; its .phpt tests; a shell

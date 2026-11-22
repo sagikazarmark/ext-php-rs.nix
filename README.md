@@ -85,7 +85,7 @@ The cache only has what this flake's nixpkgs builds. A project gets it by taking
         });
 
         # php_hello-0.1.0_php8.4-arm64-linux-musl-zts.tgz and its .sha256, and SHA256SUMS.
-        pie = rustPhpPlatform.mkPieRelease { name = "php_hello-0.1.0"; extensions = [ hello-musl ]; };
+        pie = rustPhpPlatform.mkPieRelease { extensions = [ hello-musl ]; };
 
         # Every target (Linux and macOS), NTS and ZTS, for PHP 8.4 and 8.5: 24 archives.
         pie-all = rustPhpPlatform.buildPieRelease { args = common; php = [ pkgs.php84 pkgs.php85 ]; };
@@ -222,14 +222,15 @@ Module options:
     - `allowedLibraries`, for a portable build
   - **Without a target:** built the way `buildRustPackage` builds, for the package set's host platform. With `pkgsCross.<platform>.callPackage`, that's another Nix platform, against that platform's PHP.
   - **With a target:** a portable build, which loads in any PHP of that platform: see [below](#how-a-portable-build-works).
+  - **Name:** `php-<pname>-<version>`, as nixpkgs names its PHP extensions, unless `name` is set.
   - **Output:** `lib/php/extensions/<extensionName>.so`, and `share/ext-php-rs/bindings.rs`, the Zend API as bindgen generated it. `passthru` has `extensionName`, `phpVersion`, `zts`, `target` and `headers`.
   - **Install check:** without a target, loads the module into `php`. With one, checks that the module needs only the C library (on macOS, the system's libraries and frameworks), no glibc symbol newer than the floor and no newer macOS than the minimum, and loads it into `php` when `php` is a PHP of that platform (OS, CPU, C library and thread safety).
 - **`rustPlatform`:** nixpkgs' for nixpkgs' Rust, otherwise `makeRustPlatform` with `rustToolchain`.
 - **`macosSdk`:** the macOS SDK macOS targets build with, by default nixpkgs' `apple-sdk.src`.
 - **`targets`:** `x86_64-linux-glibc`, `aarch64-linux-glibc`, `x86_64-linux-musl`, `aarch64-linux-musl`, `x86_64-darwin`, `aarch64-darwin`. The flake also has `lib.targets`.
 - **`mkTarget { arch; os ? "linux"; libc ? …; glibc ? "2.28"; macos ? "11.0"; }`:** makes other targets (`arch` is `x86_64` or `aarch64`), such as another glibc floor or minimum macOS. The flake also has `lib.mkTarget`.
-- **`mkPieRelease { name; extensions; }`:** every archive in one directory, with each one's `.sha256` file and `SHA256SUMS`. `passthru.archives` has each archive.
-- **`buildPieRelease { args; php; targets ? <all>; threadSafety ? [ "nts" "zts" ]; name ? "php_<extensionName>-<version>"; }`:** `buildRustPhpExtension`'s `args` built for every combination of `php` (a list), `targets` and `threadSafety`, as one `mkPieRelease`.
+- **`mkPieRelease { extensions; name ? "php-<pname>-<version>-pie"; }`:** every archive in one directory, with each one's `.sha256` file and `SHA256SUMS`. `passthru.archives` has each archive.
+- **`buildPieRelease { args; php; targets ? <all>; threadSafety ? [ "nts" "zts" ]; name ? <mkPieRelease's>; }`:** `buildRustPhpExtension`'s `args` built for every combination of `php` (a list), `targets` and `threadSafety`, as one `mkPieRelease`.
 - **`extensionArgs { root; workspace ? root; src ? <what the build reads>; … }`:** `buildRustPhpExtension`'s arguments for a project, read from its files. The flake also has `lib.extensionArgs`.
   - `pname` and `version` from `Cargo.toml` (a version inherited from the workspace too), and `libName` from its `[lib] name`
   - `extensionName` from `composer.json`'s `php-ext.extension-name`, which PIE names the archives and the module after; without one, the Cargo package's name, which ext-php-rs names the module after
