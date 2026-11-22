@@ -1,6 +1,26 @@
-# shellcheck shell=bash disable=SC2034 # sets image, platform and archives for the scripts that source it
-# What the scripts that load archives share: the official image for one PHP, its archives, and
-# the extension an archive is of.
+# shellcheck shell=bash disable=SC2034 # sets variables for the scripts that source it
+# What the scripts that load archives share (lib/load-pie-archives.sh, and tests/pie.sh and
+# tests/load-macos.sh): the official image for one PHP, its archives, what an archive is of, and
+# the run-tests.php command for an image.
+
+# this_arch: this machine's CPU, as PIE names it (x86_64 or arm64).
+this_arch() {
+  local arch
+  arch=$(uname -m)
+  case $arch in
+  aarch64 | arm64) echo arm64 ;;
+  *) echo "$arch" ;;
+  esac
+}
+
+# parse_asset <archive>: sets name, version, php, arch, os, libc and ts from a PIE archive's name
+# (php_<name>-<version>_php<minor>-<arch>-<os>-<libc>-<nts|zts>.tgz), or fails.
+parse_asset() {
+  local re='^php_([^-]+)-(.+)_php([0-9]+\.[0-9]+)-(x86_64|arm64)-(linux|darwin)-(glibc|musl|bsdlibc)-(nts|zts)\.tgz$'
+  [[ $(basename "$1") =~ $re ]] || return 1
+  name=${BASH_REMATCH[1]} version=${BASH_REMATCH[2]} php=${BASH_REMATCH[3]}
+  arch=${BASH_REMATCH[4]} os=${BASH_REMATCH[5]} libc=${BASH_REMATCH[6]} ts=${BASH_REMATCH[7]}
+}
 
 # image_for <php minor> <nts|zts> <x86_64|arm64> <glibc|musl>: sets image and platform, the
 # official image of that PHP and its Docker platform.

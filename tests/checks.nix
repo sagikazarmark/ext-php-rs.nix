@@ -379,6 +379,55 @@ lib.listToAttrs (
     exampleTests "php-extensions-overlay" (
       withOverlay.php85.withExtensions ({ enabled, all }: enabled ++ [ all.hello ])
     );
+
+  # loadPieArchives' command, without Docker (CI's load jobs run its script with it): it finds
+  # its helpers, selects archives by name (none here: one for another CPU, one for macOS on
+  # this one), and refuses an unknown option.
+  load-pie-archives =
+    let
+      this = if pkgs.stdenv.hostPlatform.isAarch64 then "arm64" else "x86_64";
+      other = if pkgs.stdenv.hostPlatform.isAarch64 then "x86_64" else "arm64";
+    in
+    runCommand "ext-php-rs-load-pie-archives"
+      { nativeBuildInputs = [ rustPhpPlatform.loadPieArchives ]; }
+      ''
+        mkdir archives tests
+        touch archives/php_hello-0.1.0_php8.4-${other}-linux-glibc-nts.tgz
+        touch archives/php_hello-0.1.0_php8.4-${this}-darwin-bsdlibc-nts.tgz
+        status=0
+        load-pie-archives archives tests 2> err || status=$?
+        cat err
+        [ "$status" -eq 1 ]
+        grep -q 'no Linux .* archives' err
+        status=0
+        load-pie-archives --bogus archives tests 2> err || status=$?
+        [ "$status" -eq 2 ]
+        grep -q 'unknown option --bogus' err
+        touch "$out"
+      '';
+
+  # A PHP overridden after the overlay (php.override { ztsSupport = true; … }: FrankenPHP's,
+  # from the binary cache) rebuilds the overlay's extensions and nixpkgs' for itself: it starts
+  # without a warning (an extension built for PHP without thread safety doesn't load).
+  php-extensions-overlay-zts =
+    let
+      overlay = import ../lib/php-extensions-overlay.nix { inherit lib; } {
+        extensions = [ example.args ];
+      };
+      withOverlay = pkgs.appendOverlays [ overlay ];
+      php = withOverlay.frankenphp.php.withExtensions ({ enabled, all }: enabled ++ [ all.hello ]);
+    in
+    runCommand "ext-php-rs-php-extensions-overlay-zts"
+      {
+        code = ''echo PHP_ZTS, " ", hello_world("ZTS");'';
+        expected = "1 Hello, ZTS!";
+      }
+      ''
+        result=$(${lib.getExe php} -r "$code" 2>&1)
+        echo "$result"
+        [ "$result" = "$expected" ]
+        touch "$out"
+      '';
 }
 # buildRustPackage's build options, which a portable build passes to cargo zigbuild itself:
 # a crate in a subdirectory (buildAndTestSubdir), a debug build (buildType), without the default

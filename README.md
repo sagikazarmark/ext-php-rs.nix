@@ -26,7 +26,7 @@ This creates an extension project with:
 - an overlay that adds the extension to every PHP in nixpkgs
 - PIE archives for PHP 8.4, 8.5 and 8.6 on every target, and a release workflow that publishes
   them when you push a tag
-- `.phpt` tests that `nix flake check` runs
+- `.phpt` tests and a FrankenPHP worker test that `nix flake check` runs
 - a dev shell for `cargo build`, clippy and rust-analyzer
 
 The [template's README](templates/default/README.md) covers renaming, customizing and releasing.
@@ -114,6 +114,38 @@ pkgs.php84.withExtensions ({ enabled, all }: enabled ++ [ all.hello ])
 
 In devenv, add the flake to `devenv.yaml` with `overlays: [ default ]`, then use
 `languages.php.extensions = [ "hello" ];`.
+
+### Testing
+
+These two run in the Nix sandbox as checks, without Docker:
+
+- `runPhpTests` runs `.phpt` tests with PHP's `run-tests.php`, with the extensions loaded.
+- `runFrankenphpTests` starts a [FrankenPHP](https://frankenphp.dev) and runs a test script
+  against it. The script can send requests, send them concurrently, and restart workers. These
+  cover what CLI tests can't: threads, a worker that stays loaded across requests, and module
+  restarts.
+
+`loadPieArchives` is a command for the archives users install: it loads a PIE release's Linux
+archives into PHP's official Docker images (`php:8.4-zts-alpine`, …) and runs the `.phpt` tests
+there (`load-pie-archives [--php 8.4] [--ts zts] [--libc musl] <archives> <tests>`).
+
+FrankenPHP's PHP is thread-safe (ZTS), so extensions must be built for it. With the extension's
+overlay applied, nixpkgs' `frankenphp` rebuilds them itself:
+
+```nix
+checks.frankenphp = rustPhpPlatform.runFrankenphpTests {
+  frankenphp = pkgs.frankenphp.override {
+    php = pkgs.php.withExtensions ({ enabled, all }: enabled ++ [ all.hello ]);
+  };
+  src = ./tests/frankenphp; # index.php: the worker
+  script = ''
+    expect "/?name=Nix" "Hello, Nix!"
+    restart_workers
+    expect "/?name=Nix" "Hello, Nix!"
+    concurrently 20 "/?name=Nix"
+  '';
+};
+```
 
 ### Overlay
 

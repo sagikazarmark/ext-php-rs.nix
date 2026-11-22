@@ -19,8 +19,8 @@ if [ $# -ne 5 ]; then
 fi
 dir=$(cd "$1" && pwd) php=$2 ts=$3 arch=$4 libc=$5
 tests=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-# shellcheck source=tests/lib.sh
-. "$tests/lib.sh"
+# shellcheck source=lib/load-lib.sh
+. "$tests/../lib/load-lib.sh"
 
 image_for "$php" "$ts" "$arch" "$libc"
 archives_for "$dir" "$php" "$ts" "$arch" "$libc"

@@ -7,9 +7,11 @@ To rename it: `name` in `Cargo.toml` (then `cargo generate-lockfile`), `name` an
 ## Development
 
 - `nix develop`, then `cargo build`: against nixpkgs' default PHP.
-- `nix flake check`: runs `tests/*.phpt` ([PHP's test format](https://php.github.io/php-src/miscellaneous/writing-tests.html)) with PHP 8.4, 8.5 and 8.6, with the extension loaded.
+- `nix flake check`: runs `tests/*.phpt` ([PHP's test format](https://php.github.io/php-src/miscellaneous/writing-tests.html)) with PHP 8.4, 8.5 and 8.6, with the extension loaded. It also runs them with a thread-safe (ZTS) PHP (`checks.zts`), and runs the extension in [FrankenPHP](https://frankenphp.dev)'s workers (`tests/frankenphp/index.php`): requests, worker restarts, and concurrent requests (`checks.frankenphp` in `flake.nix`).
+- `nix run .#frankenphp -- php-server --root tests/frankenphp --worker tests/frankenphp/index.php`: FrankenPHP with the extension, on port 80 by default (add `--listen :8080` for another).
 - `nix run .#php -- -r 'echo hello_world("Nix");'`: nixpkgs' default PHP with the extension.
 - `nix build .#pie`: the release archives.
+- `nix run .#load-test -- result tests`: loads the Linux archives for this machine's CPU into PHP's official Docker images and runs `tests/*.phpt` there (`--php 8.4`, `--ts zts` and `--libc musl` select some). It needs Docker, or `DOCKER=podman`. CI runs it for x86_64.
 
 `cachix use ext-php-rs` (or accepting the substituter when Nix asks) fetches the PHP headers and cargo-zigbuild that portable builds use, instead of building them. The flake takes nixpkgs from ext-php-rs.nix for that: the cache only has what that nixpkgs builds.
 

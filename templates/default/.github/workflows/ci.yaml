@@ -46,3 +46,8 @@ jobs:
       - name: Build the PIE archives
         if: matrix.runner == 'ubuntu-latest'
         run: nix build -L .#pie
+
+      # The x86_64 Linux archives in PHP's official Docker images, with tests/*.phpt.
+      - name: Load the PIE archives in PHP's official images
+        if: matrix.runner == 'ubuntu-latest'
+        run: nix run .#load-test -- result tests
