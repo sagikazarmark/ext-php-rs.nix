@@ -92,8 +92,7 @@
             src = ./tests;
           }
         )
-        # Linux only: untested on macOS, where nixpkgs links FrankenPHP's PHP statically.
-        // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+        // {
           # tests/*.phpt with a thread-safe (ZTS) PHP, as FrankenPHP and PHP 8.6's official
           # images have: FrankenPHP's (nixpkgs' default PHP version, from its binary cache).
           zts = pkgs.rustPhpPlatform.runPhpTests {

@@ -404,8 +404,7 @@ lib.listToAttrs (
         grep -q 'unknown option --bogus' err
         touch "$out"
       '';
-}
-// lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+
   # A PHP overridden after the overlay (php.override { ztsSupport = true; … }: FrankenPHP's,
   # from the binary cache) rebuilds the overlay's extensions and nixpkgs' for itself: it starts
   # without a warning (an extension built for PHP without thread safety doesn't load).

@@ -75,6 +75,8 @@ runCommand name
       curl
     ];
     inherit src worker;
+    # The server listens on 127.0.0.1, which macOS's sandbox refuses otherwise.
+    __darwinAllowLocalNetworking = true;
   }
   ''
     # Caddy keeps its configuration and data in these.

@@ -328,8 +328,9 @@ FrankenPHP uses it, which `.phpt` tests with the CLI don't, with threads (ZTS), 
 worker mode a script that stays loaded across requests (the request starts and ends
 differently: `RINIT` doesn't run for each request) and workers that restart.
 
-The server serves `src` on a free port on 127.0.0.1, in worker mode with `worker`, and the
-test is a bash script (`set -euo pipefail`) with:
+The server serves `src` on a free port on 127.0.0.1 (which the sandbox allows, on macOS
+too), in worker mode with `worker`, and the test is a bash script (`set -euo pipefail`)
+with:
 - `get <path> [curl arguments]`: prints the response's body, and fails with it on an HTTP
   error
 - `expect <path> <body>`: fails unless the response's body is `<body>`
