@@ -40,17 +40,24 @@ let
     )
   );
 
-  # FPM's helper, besides the HTTP ones. $fpm_pid is FPM's master and $fpm_log its log.
+  # FPM's helper, besides the HTTP ones. $fpm_pid is FPM's master, $fpm_log its log, and
+  # $startup_log PHP's errors as the master starts.
   helpers = writeText "fpm-test-helpers.sh" ''
     # reload: reloads FPM (SIGUSR2), as `systemctl reload php-fpm` does: the children exit
     # (MSHUTDOWN in each), and the master runs itself again (exec), so it loads the extensions
-    # again (MINIT) and forks new children. Returns once they're ready.
+    # again (MINIT) and forks new children. Returns once they're ready, and fails if PHP
+    # warned as it started again.
     reload() {
       local before
       before=$(grep -c 'ready to handle connections' "$fpm_log" || true)
       kill -USR2 "$fpm_pid"
       for _ in $(seq 300); do
         if [ "$(grep -c 'ready to handle connections' "$fpm_log" || true)" -gt "$before" ]; then
+          if [ -s "$startup_log" ]; then
+            cat "$startup_log" >&2
+            echo "reload: PHP did not start cleanly" >&2
+            return 1
+          fi
           return 0
         fi
         if ! kill -0 "$fpm_pid" 2>/dev/null; then
@@ -84,9 +91,11 @@ runCommand "${name}-php${lib.versions.majorMinor php.version}"
     chmod -R u+w app
     root=$PWD/app
     fpm_log=$PWD/fpm.log
+    startup_log=$PWD/startup.log
 
-    # PHP must start without a word: an extension that doesn't load only warns, which FPM's
-    # master prints before it opens its log.
+    # PHP must start without a word: an extension that doesn't load only warns. FPM's master
+    # drops PHP's startup errors without an error_log (startup_log below), and the CLI shows
+    # anything else an extension prints.
     echo '<?php' > "$TMPDIR/empty.php"
     if ! startup=$(php "$TMPDIR/empty.php" 2>&1) || [ -n "$startup" ]; then
       printf '%s\n' "$startup" >&2
@@ -96,7 +105,7 @@ runCommand "${name}-php${lib.versions.majorMinor php.version}"
 
     fail() {
       echo "runFpmTests: $1" >&2
-      for log in fpm.log fpm.out php.log caddy.log; do
+      for log in startup.log fpm.log fpm.out php.log caddy.log; do
         if [ -s "$log" ]; then
           echo "--- $log" >&2
           tail -n 200 "$log" >&2
@@ -107,8 +116,21 @@ runCommand "${name}-php${lib.versions.majorMinor php.version}"
 
     # FPM logs a warning for a child that crashed (a signal other than SIGQUIT, which it stops
     # them with) or that exited with an error: it starts another, and the request only fails.
-    # It logs nothing for the children it stops to reload or exit.
+    # It logs nothing for the children it stops to reload or exit. A child exits (and crashes,
+    # in MSHUTDOWN) after its last response, so this waits for FPM's log to be quiet for a
+    # second first (30 at most).
     check_children() {
+      local size quiet=0
+      for _ in $(seq 300); do
+        size=$(wc -c < fpm.log)
+        sleep 0.1
+        if [ "$(wc -c < fpm.log)" -eq "$size" ]; then
+          quiet=$((quiet + 1))
+          [ "$quiet" -lt 10 ] || break
+        else
+          quiet=0
+        fi
+      done
       if grep -E '\] child [0-9]+ exited' fpm.log | grep -v NOTICE >&2; then
         fail "a child of FPM crashed"
       fi
@@ -142,9 +164,11 @@ runCommand "${name}-php${lib.versions.majorMinor php.version}"
         echo "php_admin_flag[log_errors] = on"
         printf '%s' "$pool"
       } > fpm.conf
-      rm -f fpm.log
-      # -R: the sandbox's user may be root.
-      php-fpm --nodaemonize --allow-to-run-as-root --fpm-config fpm.conf > fpm.out 2>&1 &
+      rm -f fpm.log startup.log
+      # -R: the sandbox's user may be root. The master's PHP logs its errors to startup.log, the
+      # children's to php.log (the pool's error_log). A reload runs the same command.
+      php-fpm --nodaemonize --allow-to-run-as-root --fpm-config fpm.conf \
+        -d log_errors=1 -d error_log="$startup_log" > fpm.out 2>&1 &
       fpm_pid=$!
       wait_for "$fpm_pid" fpm.log 'ready to handle connections'
       if ! kill -0 "$fpm_pid" 2>/dev/null; then
@@ -155,6 +179,7 @@ runCommand "${name}-php${lib.versions.majorMinor php.version}"
         fail "FPM did not start"
       fi
       grep -q 'ready to handle connections' fpm.log || fail "FPM did not start in 30 seconds"
+      [ ! -s startup.log ] || fail "PHP did not start cleanly in FPM"
 
       {
         echo "{"
@@ -185,7 +210,7 @@ runCommand "${name}-php${lib.versions.majorMinor php.version}"
 
     # In a bash of its own: errexit is off throughout a command `if` tests, a subshell's
     # `set -e` included, so a failing command in the test would not stop it.
-    export url=http://127.0.0.1:$port fpm_pid fpm_log
+    export url=http://127.0.0.1:$port fpm_pid fpm_log startup_log
     if ! "$BASH" -euo pipefail -c '. "$1"; . "$2"; . "$3"' test ${./http-test-helpers.sh} ${helpers} ${test}; then
       fail "the test failed"
     fi

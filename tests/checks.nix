@@ -406,8 +406,8 @@ lib.listToAttrs (
         touch "$out"
       '';
 
-  # runFpmTests fails when a child of FPM crashes, though FPM forks another and the test's later
-  # requests succeed.
+  # runFpmTests fails when a child of FPM crashes, though FPM forks another and the test's
+  # requests succeed: here after it sent the last response, as a crash in MSHUTDOWN would.
   fpm-child-crash =
     let
       failure = pkgs.testers.testBuildFailure (
@@ -416,13 +416,12 @@ lib.listToAttrs (
           php = php84;
           src = pkgs.writeTextDir "index.php" ''
             <?php
-            if (isset($_GET['crash'])) {
-                posix_kill(getmypid(), SIGSEGV);
-            }
             echo 'ok';
+            fastcgi_finish_request();
+            usleep(500000);
+            posix_kill(getmypid(), SIGSEGV);
           '';
           script = ''
-            get "/?crash=1" || true
             expect / ok
           '';
         }

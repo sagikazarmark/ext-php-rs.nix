@@ -127,8 +127,9 @@ These three run in the Nix sandbox as checks, without Docker:
 - `runFpmTests` does the same with PHP-FPM behind Caddy. Its script can also reload FPM. This
   covers forking: FPM's master starts the extension (`MINIT`), then forks the children that
   handle requests, which don't have the threads it started. Each child handles many requests,
-  then shuts the module down itself. The check fails if a child crashes, even though FPM
-  replaces it and later requests succeed.
+  then shuts the module down itself. The check fails if a child crashes while FPM runs, even
+  though FPM replaces it and later requests succeed. FPM doesn't log how its children exit when
+  it reloads or stops, so set `maxRequests` to have them shut down while it runs.
 
 `loadPieArchives` is a command for the archives users install: it loads a PIE release's Linux
 archives into PHP's official Docker images (`php:8.4-zts-alpine`, …) and runs the `.phpt` tests

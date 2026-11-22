@@ -403,8 +403,8 @@ script (`set -euo pipefail`) with:
   It returns once they're ready.
 - `$url`: the server's address; `$fpm_pid` and `$fpm_log`: FPM's master and its log
 
-The check fails if PHP warns when it starts (an extension that doesn't load), if the test
-fails, if a child of FPM crashes (FPM starts another, so a request fails at most) or exits
+The check fails if PHP warns when it starts, in the CLI or FPM's master, and after a
+`reload` (an extension that doesn't load), if the test fails, if a child of FPM crashes (FPM starts another, so a request fails at most) or exits
 with an error, or if FPM exits during the test or doesn't stop cleanly afterwards, with
 FPM's, PHP's and Caddy's logs. FPM logs how a child exited only while it runs, not when it
 reloads or stops: set `maxRequests` to check the module's shutdown in the children.
