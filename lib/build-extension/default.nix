@@ -109,6 +109,10 @@ lib.extendMkDerivation {
     # The build's defaults (buildPhase, …), where the package sets none.
     lib.mapAttrs (name: value: args.${name} or value) (build.defaults or { })
     // {
+      # php-<pname>-<version>, as nixpkgs names its PHP extensions (buildPecl, mkExtension).
+      # pname itself stays the Cargo package's name.
+      name = args.name or "php-${finalAttrs.pname}-${finalAttrs.version}";
+
       nativeBuildInputs = build.nativeBuildInputs ++ nativeBuildInputs;
 
       cargoBuildFlags = [
