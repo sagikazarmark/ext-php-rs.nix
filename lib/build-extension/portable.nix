@@ -113,6 +113,12 @@ in
     # cargo zigbuild runs the toolchain's cargo, not the auditable one.
     auditable = false;
 
+    # buildRustPackage's cargoSetupHook tells -sys crates (zstd-sys, libz-sys, openssl-sys, …)
+    # to link the system's libraries through pkg-config: Nix's, for the build platform, which a
+    # portable module may not need. Their vendored C sources instead, built by zig for the
+    # target and linked statically (flow-php/arrow-ext's zstd-sys).
+    dontCargoUseSystemLibs = true;
+
     # buildRustPackage's cargoBuildHook (pkgs/build-support/rust/hooks/cargo-build-hook.sh),
     # with cargo zigbuild for the target, and the same handling of buildAndTestSubdir,
     # buildType, buildNoDefaultFeatures, buildFeatures and cargoBuildFlags (the build-options
