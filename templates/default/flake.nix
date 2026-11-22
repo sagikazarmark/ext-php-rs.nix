@@ -58,6 +58,12 @@
         # nixpkgs' default PHP with the extension: `nix run .#php -- -r 'echo hello_world("Nix");'`.
         php = pkgs.php.withExtensions ({ enabled, all }: enabled ++ [ all.${extensionName} ]);
 
+        # FrankenPHP with the extension, rebuilt for its thread-safe PHP:
+        # `nix run .#frankenphp -- php-server --root tests/frankenphp --worker tests/frankenphp/index.php`.
+        frankenphp = pkgs.frankenphp.override {
+          php = pkgs.php.withExtensions ({ enabled, all }: enabled ++ [ all.${extensionName} ]);
+        };
+
         # PIE's prebuilt binaries for a GitHub release: PHP 8.4, 8.5 and 8.6, NTS and ZTS, for x86_64
         # and arm64 Linux (glibc and musl) and macOS, with SHA256SUMS. Built on any of the
         # systems: on Linux, the macOS ones too.
@@ -71,9 +77,9 @@
         };
       });
 
-      # tests/*.phpt, run with PHP 8.4, 8.5 and 8.6 with the extension loaded as users load it.
       checks = forAllSystems (
         pkgs:
+        # tests/*.phpt, run with PHP 8.4, 8.5 and 8.6 with the extension loaded as users load it.
         lib.genAttrs [ "php84" "php85" "php86" ] (
           php:
           pkgs.rustPhpPlatform.runPhpTests {
@@ -82,6 +88,32 @@
             src = ./tests;
           }
         )
+        # Linux only: untested on macOS, where nixpkgs links FrankenPHP's PHP statically.
+        // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          # tests/*.phpt with a thread-safe (ZTS) PHP, as FrankenPHP and PHP 8.6's official
+          # images have: FrankenPHP's (nixpkgs' default PHP version, from its binary cache).
+          zts = pkgs.rustPhpPlatform.runPhpTests {
+            name = "php-tests-zts";
+            inherit (pkgs.frankenphp) php;
+            extensions = [ pkgs.frankenphp.php.extensions.${extensionName} ];
+            src = ./tests;
+          };
+
+          # The extension in FrankenPHP's workers (tests/frankenphp/index.php): across requests,
+          # after the workers restart, and with requests at once on PHP's threads.
+          frankenphp = pkgs.rustPhpPlatform.runFrankenphpTests {
+            inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) frankenphp;
+            src = ./tests/frankenphp;
+            script = ''
+              expect "/?name=Nix" "Hello, Nix!"
+              for i in 1 2 3; do
+                restart_workers
+                expect "/?name=restart$i" "Hello, restart$i!"
+              done
+              concurrently 20 "/?name=Nix"
+            '';
+          };
+        }
       );
 
       # cargo build, clippy and rust-analyzer, against nixpkgs' default PHP.

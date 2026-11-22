@@ -67,8 +67,9 @@ After changing either, run `update-docs` and commit the result: the `docs` check
 - The target definitions and the arguments each kind of build refuses (`lib.runTests`: a failing
   check names every test that fails).
 - The template's flake, with this flake as its `ext-php-rs` input: its checks (its `.phpt` tests,
-  with the extension through its overlay, in PHP 8.4, 8.5 and 8.6), its package and shell, and the
-  evaluation of its 36 PIE archives.
+  with the extension through its overlay, in PHP 8.4, 8.5 and 8.6, and on Linux with FrankenPHP's
+  ZTS PHP, and its FrankenPHP worker test with `runFrankenphpTests`), its package and shell, and
+  the evaluation of its 36 PIE archives.
 - The generated docs are up to date.
 - Real extensions ([`tests/real-world.nix`](tests/real-world.nix)), described below.
 

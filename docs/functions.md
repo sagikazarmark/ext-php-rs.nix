@@ -19,6 +19,7 @@ devenv module as `config.ext-php-rs.lib`.
   - [`rustPhpPlatform.buildPieRelease`](#rustphpplatformbuildpierelease)
   - [`rustPhpPlatform.mkPieRelease`](#rustphpplatformmkpierelease)
   - [`rustPhpPlatform.runPhpTests`](#rustphpplatformrunphptests)
+  - [`rustPhpPlatform.runFrankenphpTests`](#rustphpplatformrunfrankenphptests)
   - [`rustPhpPlatform.mkShell`](#rustphpplatformmkshell)
   - [`rustPhpPlatform.targets`](#rustphpplatformtargets)
   - [`rustPhpPlatform.mkTarget`](#rustphpplatformmktarget)
@@ -316,6 +317,65 @@ checks.tests = rustPhpPlatform.runPhpTests {
   php = pkgs.php84;
   extensions = [ hello ];
   src = ./tests;
+};
+```
+
+### `rustPhpPlatform.runFrankenphpTests`
+
+Runs a FrankenPHP server and a test against it, as a check: an extension used the way
+FrankenPHP uses it, which `.phpt` tests with the CLI don't, with threads (ZTS), and in
+worker mode a script that stays loaded across requests (the request starts and ends
+differently: `RINIT` doesn't run for each request) and workers that restart.
+
+The server serves `src` on a free port on 127.0.0.1, in worker mode with `worker`, and the
+test is a bash script (`set -euo pipefail`) with:
+- `get <path> [curl arguments]`: prints the response's body, and fails with it on an HTTP
+  error
+- `expect <path> <body>`: fails unless the response's body is `<body>`
+- `concurrently <n> <path>`: `<n>` requests at once, which must all succeed
+- `restart_workers`: restarts the workers (FrankenPHP's admin API), as
+  `frankenphp run --watch` and `opcache_reset()` do: FrankenPHP shuts PHP down and starts
+  it again in the same process, so every module's shutdown and startup (`MSHUTDOWN`,
+  `MINIT`) run again, with the module still loaded
+- `$url` and `$admin_url`: the server's and its admin API's addresses
+
+The check fails if PHP warns when it starts (an extension that doesn't load), if the test
+fails, or if FrankenPHP exits during the test or doesn't exit cleanly afterwards, with
+FrankenPHP's log.
+
+#### Inputs
+
+- `frankenphp`: The FrankenPHP to run, with the extensions to test. FrankenPHP embeds PHP
+  with thread safety (ZTS), so they must be built for its PHP. nixpkgs' `frankenphp`
+  rebuilds `php.withExtensions`'s for it (nixpkgs' and an
+  [extension overlay](#ext-php-rslibmkphpextensionsoverlay)'s):
+  `pkgs.frankenphp.override { php = pkgs.php.withExtensions ({ enabled, all }: enabled ++ [ all.hello ]); }`.
+  Without an overlay, build the extension against `pkgs.frankenphp.php.unwrapped`. With
+  nixpkgs' default PHP, FrankenPHP's PHP comes from nixpkgs' binary cache.
+- `src`: The document root.
+- `script`: The test.
+- `worker`: The worker script in `src`, or `null` for classic mode, where each request runs
+  its script. Default: `"index.php"`.
+- `workers`: The number of workers. Default: `2`.
+- `threads`: PHP's threads, more than `workers`. Default: two more than the workers.
+- `name`: Default: `"frankenphp-tests"`.
+
+#### Example
+
+```nix
+checks.frankenphp = rustPhpPlatform.runFrankenphpTests {
+  # With an extension overlay applied to pkgs.
+  frankenphp = pkgs.frankenphp.override {
+    php = pkgs.php.withExtensions ({ enabled, all }: enabled ++ [ all.hello ]);
+  };
+  # index.php: while (frankenphp_handle_request(fn () => print hello_world($_GET["name"]))) {}
+  src = ./tests/frankenphp;
+  script = ''
+    expect "/?name=Nix" "Hello, Nix!"
+    restart_workers
+    expect "/?name=Nix" "Hello, Nix!"
+    concurrently 20 "/?name=Nix"
+  '';
 };
 ```
 
