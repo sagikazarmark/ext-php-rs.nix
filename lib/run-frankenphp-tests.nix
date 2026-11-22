@@ -149,13 +149,10 @@ runCommand name
     kill -0 "$pid" 2>/dev/null || fail "FrankenPHP did not start"
     grep -q 'serving initial configuration' frankenphp.log || fail "FrankenPHP did not start in 30 seconds"
 
-    url=http://127.0.0.1:$port
-    admin_url=http://127.0.0.1:$admin
-    if ! (
-      set -euo pipefail
-      . ${helpers}
-      . ${test}
-    ); then
+    # In a bash of its own: errexit is off throughout a command `if` tests, a subshell's
+    # `set -e` included, so a failing command in the test would not stop it.
+    export url=http://127.0.0.1:$port admin_url=http://127.0.0.1:$admin
+    if ! "$BASH" -euo pipefail -c '. "$1"; . "$2"' test ${helpers} ${test}; then
       fail "the test failed"
     fi
 
