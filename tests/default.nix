@@ -133,7 +133,8 @@ in
       }
     )
     # The template's checks (its .phpt tests, with the extension through its overlay, in PHP
-    # 8.4, 8.5 and 8.6), package and shell, and its release archives: evaluated here, built by the template's CI.
+    # 8.4, 8.5 and 8.6 and in ZTS, and its FrankenPHP and FPM tests), package and shell, built
+    # here; its release archives are only evaluated (template-pie), as the example's are built.
     // lib.mapAttrs' (name: lib.nameValuePair "template-${name}") template.checks.${system}
     // {
       # docs/ has what docs/generate.nix generates: `update-docs` (devenv) copies it there.
