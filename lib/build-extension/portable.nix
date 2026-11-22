@@ -106,6 +106,14 @@ in
   # C compiler instead.
   // lib.optionalAttrs (buildRust.rustcTarget != target.rustTarget) {
     "CARGO_TARGET_${buildRust.cargoEnvVarTarget}_LINKER" = "${stdenv.cc}/bin/cc";
+  }
+  # A build script for the build platform's own target may compile a program with zig and run
+  # it (aws-lc-sys's memcmp check, in jaapieaapie1/rabbitmq-ext). zig gives a glibc executable
+  # the loader /lib64/ld-linux-x86-64.so.2 (or the CPU's), which the Nix sandbox does not have:
+  # Nix's instead. Such checks take it from LDFLAGS, as CMake does; rustc does not read it, so
+  # the module is linked without it.
+  // lib.optionalAttrs (buildRust.rustcTarget == target.rustTarget && target.libc == "glibc") {
+    LDFLAGS = "-Wl,--dynamic-linker=${stdenv.cc.bintools.dynamicLinker}";
   };
 
   # Each one unless the package sets it.
