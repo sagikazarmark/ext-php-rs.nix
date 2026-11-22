@@ -21,6 +21,8 @@ env:
   # The PHP headers' configure scripts are single-threaded, so a cold cache built one at a time
   # takes well over an hour. Run as many builds as there are CPUs (each with one core by default).
   DEVENV_MAX_JOBS: 4
+  # Depot's runners do not set $USER, which cachix requires.
+  USER: runner
 
 jobs:
   build:
