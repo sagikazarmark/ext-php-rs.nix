@@ -2,8 +2,9 @@
 # Source: .github/workflows/ci.yaml
 #
 # Changes made:
-# - Changed runs-on from "ubuntu-latest" to "depot-ubuntu-latest" in job "checks"
-# - Changed runs-on from "macos-latest" to "depot-ubuntu-latest" in job "load-macos"
+# - Dropped the macOS build and the load-macos job: Depot CI has no macOS sandboxes
+#   (https://depot.dev/docs/ci/overview). GitHub Actions still runs them.
+# - Mapped the other runners to Depot CI labels; unknown labels fall back to x86 depot-ubuntu-latest.
 
 name: CI
 
@@ -19,8 +20,9 @@ permissions:
 env:
   # devenv runs a quarter of the CPUs' worth of builds at once: one on GitHub's 3-4 CPU runners.
   # The PHP headers' configure scripts are single-threaded, so a cold cache built one at a time
-  # takes well over an hour. Run as many builds as there are CPUs (each with one core by default).
-  DEVENV_MAX_JOBS: 4
+  # takes well over an hour. Run as many builds as there are CPUs (each with one core by default):
+  # two on the default Depot runners, and the build job overrides it for its larger runners.
+  DEVENV_MAX_JOBS: 2
   # Depot's runners do not set $USER, which cachix requires.
   USER: runner
 
@@ -28,13 +30,16 @@ jobs:
   build:
     name: Build (${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
+    env:
+      DEVENV_MAX_JOBS: 16
     # A change to every portable build (a pull request, which does not push to the cache)
     # rebuilds them all: over an hour on macOS.
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+        # 16 CPUs, as the job's DEVENV_MAX_JOBS assumes.
+        runner: [depot-ubuntu-24.04-16, depot-ubuntu-24.04-arm-16]
 
     steps:
       - name: Checkout repository
@@ -53,14 +58,14 @@ jobs:
         run: devenv build
 
       - name: Collect the archives
-        if: matrix.runner == 'ubuntu-latest'
+        if: matrix.runner == 'depot-ubuntu-24.04-16'
         run: |
           out=$(devenv build outputs.load-tests | jq -r '."outputs.load-tests"')
           mkdir dist
           cp -rL "$out"/* dist/
 
       - name: Upload the archives
-        if: matrix.runner == 'ubuntu-latest'
+        if: matrix.runner == 'depot-ubuntu-24.04-16'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: load-tests
@@ -69,7 +74,7 @@ jobs:
 
   checks:
     name: Checks
-    runs-on: depot-ubuntu-latest # was: ubuntu-latest. Mapped standard GitHub runner to Depot equivalent.
+    runs-on: depot-ubuntu-24.04
     timeout-minutes: 30
 
     steps:
@@ -97,7 +102,7 @@ jobs:
   load:
     name: Load PHP ${{ matrix.php }} ${{ matrix.ts }} ${{ matrix.arch }} ${{ matrix.libc }}
     needs: build
-    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'depot-ubuntu-24.04-arm' || 'depot-ubuntu-24.04' }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -106,7 +111,7 @@ jobs:
         ts: [nts, zts]
         arch: [x86_64, arm64]
         libc: [glibc, musl]
-        # The official images of 8.6 are ZTS only (docker-library/php#1686). load-macos loads 8.6 NTS.
+        # The official images of 8.6 are ZTS only (docker-library/php#1686). load-macos (GitHub Actions only) loads 8.6 NTS.
         exclude:
           - php: "8.6"
             ts: nts
@@ -128,37 +133,3 @@ jobs:
 
       - name: Install with PIE and test
         run: bash tests/pie.sh dist "${{ matrix.php }}" "${{ matrix.ts }}" "${{ matrix.arch }}" "${{ matrix.libc }}"
-
-  load-macos:
-    name: Load PHP ${{ matrix.php }} ${{ matrix.ts }} arm64 macOS
-    needs: build
-    runs-on: depot-ubuntu-latest # was: macos-latest. Nonstandard GitHub runner label detected, changed to default Depot runner.
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        php: ["8.4", "8.5", "8.6"]
-        ts: [nts, zts]
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up PHP
-        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
-        with:
-          php-version: ${{ matrix.php }}
-          coverage: none
-        env:
-          phpts: ${{ matrix.ts }}
-
-      - name: Download the archives
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: load-tests
-          path: dist
-
-      - name: Load and test
-        run: bash tests/load-macos.sh dist
