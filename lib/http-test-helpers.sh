@@ -14,7 +14,8 @@ get() {
 # as $(…) strips it).
 expect() {
   local body
-  body=$(get "$1")
+  # Returns itself: errexit is off in a function an `if` tests.
+  body=$(get "$1") || return
   if [ "$body" != "$2" ]; then
     printf 'GET %s\n--- expected\n%s\n--- got\n%s\n' "$1" "$2" "$body" >&2
     return 1
