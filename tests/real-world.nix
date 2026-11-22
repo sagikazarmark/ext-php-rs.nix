@@ -1,7 +1,6 @@
-# Real extensions built with ext-php-rs, the ones with the most downloads among Packagist's PIE
-# packages (type php-ext) in November 2026, pinned at their latest releases. They are built
-# the way this flake builds any extension, which their own build setups (.cargo/config.toml,
-# build scripts, C dependencies) must survive:
+# Real extensions built with ext-php-rs, Packagist's PIE packages (type php-ext), pinned at
+# their releases. They are built the way this flake builds any extension, which their own
+# build setups (.cargo/config.toml, build scripts, C dependencies) must survive:
 #
 # - natively against PHP 8.4, loaded by the install check;
 # - their .phpt tests, through php.withExtensions: upstream's where the release has them,
@@ -14,6 +13,8 @@
   lib,
   runCommand,
   fetchFromGitHub,
+  pkg-config,
+  zstd,
   php84,
   rustPhpPlatform,
 }:
@@ -39,6 +40,32 @@ let
       };
       # GitHub's archive of the release leaves its tests out.
       tests = ./real-world/anydoc;
+    };
+
+    # https://packagist.org/packages/flow-php/arrow-ext: Apache Arrow and Parquet for
+    # flow-php/parquet. ext-php-rs 0.16.3, a Cargo workspace (the extension at its root, an
+    # engine crate with a build script of its own, ext-php-rs-build), a build script that
+    # takes the version from the archive's .git_archival.txt or git, and a Cargo package with
+    # no version.
+    arrow = {
+      args = {
+        pname = "arrow";
+        version = "0.48.0";
+        src = fetchFromGitHub {
+          owner = "flow-php";
+          repo = "arrow-ext";
+          rev = "d5ff644a2a6ca76da372784ea9200c789d5dffc6"; # 0.48.0
+          hash = "sha256-Gf83DBAJJsVDGsjo2oa19hgXOpcS/S7mPxPd7cPAV/Y=";
+        };
+        cargoHash = "sha256-T44BNLsFJCOE8Btij0/Zz/h+de3UzplVXTbF9Epw6gs=";
+        # zstd-sys (parquet's zstd) links nixpkgs' zstd in a native build, as buildRustPackage
+        # tells it to; a portable build compiles its own.
+        nativeBuildInputs = [ pkg-config ];
+        buildInputs = [ zstd ];
+      };
+      # GitHub's archive of the release leaves its tests out, and the others need flow-php's
+      # monorepo (vendor/autoload.php).
+      tests = ./real-world/arrow;
     };
 
     # https://packagist.org/packages/bsn4/grpc: a gRPC client compatible with the C extension
@@ -86,6 +113,24 @@ let
           rm "$out"/{,integration/}0001-include.php*
         '';
       };
+
+    # https://packagist.org/packages/jaapieaapie1/rabbitmq-ext: a RabbitMQ client (lapin) on
+    # tokio. ext-php-rs 0.15.8, a Cargo package named rabbitmq_ext with the module rabbitmq_ext.
+    rabbitmq = {
+      args = {
+        pname = "rabbitmq_ext";
+        version = "1.0.0";
+        src = fetchFromGitHub {
+          owner = "jaapieaapie1";
+          repo = "rabbitmq-ext";
+          rev = "a9705f9c2a3d88be74694b5f59bba09bc3fc3533"; # 1.0.0
+          hash = "sha256-enUymtgNgm6RN+cxfZDhZFUU35XrHEMJ9TTMMxRML9U=";
+        };
+        cargoHash = "sha256-EmxMpQEhyLMg/niySdOudo5a2GxARgqy+CZ9xr9OShE=";
+      };
+      # Its own (Pest) need a RabbitMQ server.
+      tests = ./real-world/rabbitmq;
+    };
   };
 
   # Each extension's builds: native, against PHP 8.4, and portable, by target and thread safety.

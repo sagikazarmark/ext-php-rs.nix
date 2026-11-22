@@ -279,6 +279,7 @@ To check another PHP release, compare `share/ext-php-rs/bindings.rs` with bindin
 - Modules are built against nixpkgs' PHP patch release. A module loads into later patch releases of the same minor, and into earlier ones as long as it uses no function added since. Debug builds reference every bound function, so they need at least that patch release.
 - Until nixpkgs has cargo-zigbuild 0.24, the scope's is built from source, once.
 - PIE archives are for Linux and macOS; PIE on Windows wants DLLs.
+- Portable builds run bindgen with zig's libclang, which old bindgen releases may misread: [kcs/lopdf](https://packagist.org/packages/kcs/lopdf) 0.1.0 (ext-php-rs 0.13.1, bindgen 0.68.1) gets opaque Zend structs with zig 0.17's libclang 22, though it builds natively with nixpkgs' libclang 21.
 
 ## Development
 
@@ -307,13 +308,15 @@ The flake has the library only; its one input is nixpkgs. The tests and the deve
   - `extensionArgs` on the template and fixtures (`tests/fixtures/extension-args`: a workspace version, a `[lib] name`, a `composer.json`; `tests/fixtures/workspace`: a crate in a workspace)
   - the target definitions and the arguments each kind of build refuses (`lib.runTests`: a failing check names every test that fails)
   - the template's flake, with this flake as its `ext-php-rs` input: its checks (its `.phpt` tests, with the extension through its overlay, in PHP 8.4, 8.5 and 8.6), its package and shell, and the evaluation of its 36 PIE archives
-  - three real extensions (`tests/real-world.nix`), the ext-php-rs extensions with the most downloads among Packagist's PIE packages, pinned at their releases. Each one is built natively for PHP 8.4, tested with `.phpt` files through `php.withExtensions`, and cross-compiled for x86_64 glibc NTS, aarch64 musl ZTS and aarch64 macOS NTS. They bring build setups this flake must cope with: their own build scripts, C and assembly dependencies (ring), and `.cargo/config.toml` linker settings.
+  - real extensions (`tests/real-world.nix`), ext-php-rs extensions among Packagist's PIE packages, pinned at their releases. Each one is built natively for PHP 8.4, tested with `.phpt` files through `php.withExtensions`, and cross-compiled for x86_64 glibc NTS, aarch64 musl ZTS and aarch64 macOS NTS. They bring build setups this flake must cope with: their own build scripts, C and assembly dependencies (ring, zstd), a Cargo workspace, and `.cargo/config.toml` linker settings.
 
     | Extension | Package | ext-php-rs | Tests |
     | --- | --- | --- | --- |
     | `anydoc` | [hosmelq/ext-anydoc](https://packagist.org/packages/hosmelq/ext-anydoc) 1.0.0 | 0.16.5 | ours (`tests/real-world/anydoc`): format detection, from its repository's tests, which its release archive leaves out |
+    | `arrow` | [flow-php/arrow-ext](https://packagist.org/packages/flow-php/arrow-ext) 0.48.0 | 0.16.3 | ours (`tests/real-world/arrow`): three of its tests (the extension, its `phpinfo()` and version), which its release archive leaves out; the rest need flow-php's monorepo |
     | `grpc` | [bsn4/grpc](https://packagist.org/packages/bsn4/grpc) 0.4.0 | 0.15.15 | ours (`tests/real-world/grpc`): an insecure `Grpc\Channel` and its target |
     | `mjml` | [kcs/mjml](https://packagist.org/packages/kcs/mjml) 1.2.2 | 0.16.2 | its own `tests/`, but one that fetches a template from GitHub |
+    | `rabbitmq` | [jaapieaapie1/rabbitmq-ext](https://packagist.org/packages/jaapieaapie1/rabbitmq-ext) 1.0.0 | 0.15.8 | ours (`tests/real-world/rabbitmq`): its exceptions, and a refused connection; its own (Pest) need a RabbitMQ server |
 - **`devenv build outputs.load-tests`** collects every portable archive (the example's and the real extensions'), each extension's `.phpt` tests (`tests/<name>/`), PIE (1.5.5), and PHP's `run-tests.php`. With it:
   - **`tests/load.sh <dir> <php minor> <nts|zts> <x86_64|arm64> <glibc|musl>`** loads that PHP's Linux archives into its official image and runs their `.phpt` tests there with the image's `run-tests.php`, the module loaded alone (`-n`) (Docker; Docker Desktop emulates the other CPU).
   - **`tests/pie.sh <dir> <php minor> <nts|zts> <x86_64|arm64> <glibc|musl>`** installs them with `pie install` instead, then runs the `.phpt` tests with the php.ini PIE leaves. PIE looks for pre-packaged binaries through GitHub's API: `tests/pie-api.py` stands in for it, with a certificate the image trusts.
