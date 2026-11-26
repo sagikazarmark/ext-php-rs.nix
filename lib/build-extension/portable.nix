@@ -92,29 +92,31 @@ in
     export PATH="${toolchain}/bin:$PATH" RUSTC="${toolchain}/bin/rustc"
   '';
 
-  env = {
+  setupEnv = {
     # A stub for the target's PHP, which cannot run here.
     PHP = "${headers}/bin/php";
     PHP_CONFIG = "${headers}/bin/php-config";
     # bindgen parses the target's headers with zig's builtin headers (cargo-zigbuild adds
     # them), which only the libclang of zig's own LLVM version understands.
     LIBCLANG_PATH = "${zigLibclang}/lib";
-  }
-  # Build scripts and proc macros are linked for the build platform, by the linker a package's
-  # .cargo/config.toml may name for its triple (kcs/mjml names aarch64-linux-gnu-gcc for
-  # aarch64 glibc), which cargo-zigbuild only replaces for the target: the build platform's own
-  # C compiler instead.
-  // lib.optionalAttrs (buildRust.rustcTarget != target.rustTarget) {
-    "CARGO_TARGET_${buildRust.cargoEnvVarTarget}_LINKER" = "${stdenv.cc}/bin/cc";
-  }
-  # A build script for the build platform's own target may compile a program with zig and run
-  # it (aws-lc-sys's memcmp check, in jaapieaapie1/rabbitmq-ext). zig gives a glibc executable
-  # the loader /lib64/ld-linux-x86-64.so.2 (or the CPU's), which the Nix sandbox does not have:
-  # Nix's instead. Such checks take it from LDFLAGS, as CMake does; rustc does not read it, so
-  # the module is linked without it.
-  // lib.optionalAttrs (buildRust.rustcTarget == target.rustTarget && target.libc == "glibc") {
-    LDFLAGS = "-Wl,--dynamic-linker=${stdenv.cc.bintools.dynamicLinker}";
   };
+
+  env =
+    # Build scripts and proc macros are linked for the build platform, by the linker a package's
+    # .cargo/config.toml may name for its triple (kcs/mjml names aarch64-linux-gnu-gcc for
+    # aarch64 glibc), which cargo-zigbuild only replaces for the target: the build platform's
+    # own C compiler instead.
+    lib.optionalAttrs (buildRust.rustcTarget != target.rustTarget) {
+      "CARGO_TARGET_${buildRust.cargoEnvVarTarget}_LINKER" = "${stdenv.cc}/bin/cc";
+    }
+    # A build script for the build platform's own target may compile a program with zig and run
+    # it (aws-lc-sys's memcmp check, in jaapieaapie1/rabbitmq-ext). zig gives a glibc executable
+    # the loader /lib64/ld-linux-x86-64.so.2 (or the CPU's), which the Nix sandbox does not have:
+    # Nix's instead. Such checks take it from LDFLAGS, as CMake does; rustc does not read it, so
+    # the module is linked without it.
+    // lib.optionalAttrs (buildRust.rustcTarget == target.rustTarget && target.libc == "glibc") {
+      LDFLAGS = "-Wl,--dynamic-linker=${stdenv.cc.bintools.dynamicLinker}";
+    };
 
   # Each one unless the package sets it.
   defaults = {
