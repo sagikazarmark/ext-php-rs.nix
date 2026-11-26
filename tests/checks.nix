@@ -361,6 +361,54 @@ lib.listToAttrs (
       };
     };
 
+  # Each build's inputDerivation (everything it builds with, to fetch or cache without building
+  # it) has the PHP headers it builds against, and a portable build's zig's libclang, so it
+  # differs by PHP version and thread safety; mkShell's has libclang. The portable build is for a
+  # target whose module no PHP here loads: its install check would refer to `php` otherwise.
+  input-derivation =
+    let
+      portable =
+        php: zts:
+        rustPhpPlatform.buildRustPhpExtension (
+          example.args
+          // {
+            inherit php zts;
+            target = rustPhpPlatform.targets.aarch64-linux-musl;
+          }
+        );
+      nts = portable php84 false;
+      native = example.build php84;
+      shell = rustPhpPlatform.mkShell { php = php84; };
+      closure = drv: pkgs.writeClosure [ drv.inputDerivation ];
+    in
+    assert nts.inputDerivation.drvPath != (portable php85 false).inputDerivation.drvPath;
+    assert nts.inputDerivation.drvPath != (portable php84 true).inputDerivation.drvPath;
+    runCommand "ext-php-rs-input-derivation" { } ''
+      has() {
+        if ! grep -qx "$2" "$3"; then
+          echo "$1's inputDerivation does not have $2" >&2
+          exit 1
+        fi
+      }
+      has portable ${nts.headers} ${closure nts}
+      has portable ${rustPhpPlatform.zigLibclang} ${closure nts}
+      has native ${native.headers} ${closure native}
+      has mkShell ${lib.getLib pkgs.llvmPackages.libclang} ${closure shell}
+      touch "$out"
+    '';
+
+  # mkShell sets LIBCLANG_PATH unless the shell's env does. Building a shell dumps its
+  # environment, after its setup hooks.
+  mk-shell-env =
+    let
+      shell = args: rustPhpPlatform.mkShell ({ php = php84; } // args);
+    in
+    runCommand "ext-php-rs-mk-shell-env" { } ''
+      grep -qx 'declare -x LIBCLANG_PATH="${lib.getLib pkgs.llvmPackages.libclang}/lib"' ${shell { }}
+      grep -qx 'declare -x LIBCLANG_PATH="/custom/lib"' ${shell { env.LIBCLANG_PATH = "/custom/lib"; }}
+      touch "$out"
+    '';
+
   # An extension's flake publishing it for every PHP of nixpkgs (lib.mkPhpExtensionsOverlay),
   # with nixpkgs' Rust: loaded by name, as devenv's languages.php.extensions does, without
   # rebuilding PHP.

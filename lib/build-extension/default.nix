@@ -13,9 +13,12 @@
 #   darwin, rustTarget,          the platform the module is for: macOS or not, its rustc
 #   cargoTripleDir,              target, Cargo's directory under target/, and the cdylib's
 #   sharedLibrary                file extension
-#   nativeBuildInputs, env       joined with the package's own
+#   nativeBuildInputs            joined with the package's own
+#   setupEnv                     the variables that point at the PHP and libclang to build
+#                                with, which a setup hook sets (../setup-env-hook.nix)
 #   canLoadIntoPhp               whether the install check loads the module into `php`
 # and optionally (empty by default):
+#   env                          joined with the package's own
 #   rustflags                    rustflags the module needs on that platform
 #   preBuild                     runs before the rustflags are set, and the package's preBuild
 #   defaults                     derivation arguments, each one unless the package sets it
@@ -90,6 +93,8 @@ lib.extendMkDerivation {
           buildType;
       outDir = "target/${build.cargoTripleDir}/${profileDir}";
       libFile = "lib${libName}${build.sharedLibrary}";
+      # The build's setupEnv, each variable unless the package's env sets it.
+      setupEnvHook = callPackage ../setup-env-hook.nix { } build.setupEnv;
       rustflags = [
         # Panic locations name the source files; the build directory's name is random on macOS.
         "--remap-path-prefix=$NIX_BUILD_TOP=/build"
@@ -113,7 +118,7 @@ lib.extendMkDerivation {
       # pname itself stays the Cargo package's name.
       name = args.name or "php-${finalAttrs.pname}-${finalAttrs.version}";
 
-      nativeBuildInputs = build.nativeBuildInputs ++ nativeBuildInputs;
+      nativeBuildInputs = [ setupEnvHook ] ++ build.nativeBuildInputs ++ nativeBuildInputs;
 
       cargoBuildFlags = [
         "--package"
@@ -121,7 +126,7 @@ lib.extendMkDerivation {
       ]
       ++ cargoBuildFlags;
 
-      env = build.env // args.env or { };
+      env = build.env or { } // args.env or { };
 
       # The target's rustflags, given to Cargo with --config: they join the project's own
       # (.cargo/config.toml), which RUSTFLAGS would replace. Where RUSTFLAGS is set (by

@@ -63,7 +63,7 @@ in
   sharedLibrary = stdenv.hostPlatform.extensions.sharedLibrary;
 
   nativeBuildInputs = [ rustPlatform.bindgenHook ];
-  env = {
+  setupEnv = {
     PHP = if runsPhp then "${unwrapped}/bin/php" else "${headers}/bin/php";
     PHP_CONFIG = "${headers}/bin/php-config";
   };
