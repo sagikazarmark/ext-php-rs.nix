@@ -30,6 +30,7 @@
 let
   forNixpkgs = callPackage ./nixpkgs.nix { };
   forPortable = callPackage ./portable.nix { };
+  splitBuild = callPackage ./cargo-artifacts.nix { };
 in
 lib.extendMkDerivation {
   constructDrv = rustPlatform.buildRustPackage;
@@ -41,6 +42,7 @@ lib.extendMkDerivation {
     "cargoPackage"
     "libName"
     "allowedLibraries"
+    "buildCargoArtifacts"
   ];
 
   extendDrvArgs =
@@ -58,6 +60,9 @@ lib.extendMkDerivation {
       # The cdylib's name ([lib] name in Cargo.toml).
       libName ? lib.replaceStrings [ "-" ] [ "_" ] cargoPackage,
       buildType ? "release",
+      # Whether to compile the Cargo dependencies in a derivation of their own
+      # (cargo-artifacts.nix), which a change to the source doesn't rebuild.
+      buildCargoArtifacts ? false,
       cargoBuildFlags ? [ ],
       # Shared libraries the module may need, for a target only: by default its C library's.
       allowedLibraries ? null,
@@ -90,24 +95,67 @@ lib.extendMkDerivation {
           buildType;
       outDir = "target/${build.cargoTripleDir}/${profileDir}";
       libFile = "lib${libName}${build.sharedLibrary}";
-      rustflags = [
-        # Panic locations name the source files; the build directory's name is random on macOS.
-        "--remap-path-prefix=$NIX_BUILD_TOP=/build"
-      ]
-      ++ lib.optionals build.darwin [
-        # A module leaves the Zend API's symbols to PHP, which defines them when it loads it.
-        "-C"
-        "link-arg=-undefined"
-        "-C"
-        "link-arg=dynamic_lookup"
-        # Its name, instead of the path of the build.
-        "-C"
-        "link-arg=-Wl,-install_name,${extensionName}.so"
-      ]
-      ++ build.rustflags or [ ];
+      rustflags =
+        lib.optional (!buildCargoArtifacts)
+          # Panic locations name the source files; the build directory's name is random on macOS.
+          "--remap-path-prefix=$NIX_BUILD_TOP=/build"
+        ++ lib.optionals build.darwin [
+          # A module leaves the Zend API's symbols to PHP, which defines them when it loads it.
+          "-C"
+          "link-arg=-undefined"
+          "-C"
+          "link-arg=dynamic_lookup"
+          # Its name, instead of the path of the build.
+          "-C"
+          "link-arg=-Wl,-install_name,${extensionName}.so"
+        ]
+        ++ build.rustflags or [ ];
+      # The target's rustflags, given to Cargo with --config: they join the project's own
+      # (.cargo/config.toml), which RUSTFLAGS would replace. Where RUSTFLAGS is set (by
+      # buildRustPackage for a debug build on macOS, for one), they join it instead.
+      commonPreBuild =
+        build.preBuild or ""
+        + lib.optionalString (rustflags != [ ]) ''
+          extPhpRsRustflags=(${lib.concatMapStringsSep " " (flag: ''"${flag}"'') rustflags})
+          if [ -n "''${RUSTFLAGS-}" ]; then
+            export RUSTFLAGS="$RUSTFLAGS ''${extPhpRsRustflags[*]}"
+          else
+            extPhpRsConfig=$(printf '"%s",' "''${extPhpRsRustflags[@]}")
+            extPhpRsConfig="--config=target.${build.rustTarget}.rustflags=[''${extPhpRsConfig%,}]"
+            if [[ "$(declare -p cargoBuildFlags 2>/dev/null)" == "declare -a"* ]]; then
+              cargoBuildFlags+=("$extPhpRsConfig")
+            else
+              cargoBuildFlags="''${cargoBuildFlags-} $extPhpRsConfig"
+            fi
+          fi
+        '';
+      split = splitBuild {
+        inherit finalAttrs;
+        portable = target != null;
+        preBuild = commonPreBuild + args.preBuild or "";
+        buildPhase = args.buildPhase or (build.defaults.buildPhase or "cargoBuildHook");
+        customBuildPhase = args ? buildPhase;
+      };
     in
     # The build's defaults (buildPhase, …), where the package sets none.
     lib.mapAttrs (name: value: args.${name} or value) (build.defaults or { })
+    // lib.optionalAttrs buildCargoArtifacts { inherit (split) buildPhase; }
+    // lib.optionalAttrs (buildCargoArtifacts && (args.cargoLock.lockFile or null) != null) {
+      # A lock file addressed relative to a flake's outPath mustn't carry the
+      # entire flake source into importCargoLock's vendor derivation.
+      cargoLock = args.cargoLock // {
+        lockFile = builtins.path {
+          path = args.cargoLock.lockFile;
+          name = "Cargo.lock";
+        };
+      };
+    }
+    // lib.optionalAttrs (buildCargoArtifacts && args ? cargoHash) {
+      depsExtraArgs = {
+        src = split.dummySrc;
+      }
+      // args.depsExtraArgs or { };
+    }
     // {
       # php-<pname>-<version>, as nixpkgs names its PHP extensions (buildPecl, mkExtension).
       # pname itself stays the Cargo package's name.
@@ -121,28 +169,16 @@ lib.extendMkDerivation {
       ]
       ++ cargoBuildFlags;
 
-      env = build.env // args.env or { };
+      env =
+        build.env
+        // lib.optionalAttrs buildCargoArtifacts {
+          # nixpkgs otherwise seeds -frandom-seed from $out. bindgen tracks this
+          # flag via BINDGEN_EXTRA_CLANG_ARGS; it must match across both builds.
+          NIX_OUTPATH_USED_AS_RANDOM_SEED = finalAttrs.cargoDeps;
+        }
+        // args.env or { };
 
-      # The target's rustflags, given to Cargo with --config: they join the project's own
-      # (.cargo/config.toml), which RUSTFLAGS would replace. Where RUSTFLAGS is set (by
-      # buildRustPackage for a debug build on macOS, for one), they join it instead.
-      preBuild =
-        build.preBuild or ""
-        + ''
-          extPhpRsRustflags=(${lib.concatMapStringsSep " " (flag: ''"${flag}"'') rustflags})
-          if [ -n "''${RUSTFLAGS-}" ]; then
-            export RUSTFLAGS="$RUSTFLAGS ''${extPhpRsRustflags[*]}"
-          else
-            extPhpRsConfig=$(printf '"%s",' "''${extPhpRsRustflags[@]}")
-            extPhpRsConfig="--config=target.${build.rustTarget}.rustflags=[''${extPhpRsConfig%,}]"
-            if [[ "$(declare -p cargoBuildFlags 2>/dev/null)" == "declare -a"* ]]; then
-              cargoBuildFlags+=("$extPhpRsConfig")
-            else
-              cargoBuildFlags="''${cargoBuildFlags-} $extPhpRsConfig"
-            fi
-          fi
-        ''
-        + args.preBuild or "";
+      preBuild = if buildCargoArtifacts then split.preBuild else commonPreBuild + args.preBuild or "";
 
       installPhase =
         args.installPhase or ''
@@ -184,6 +220,7 @@ lib.extendMkDerivation {
         inherit extensionName target;
         phpVersion = (php.unwrapped or php).version;
       }
+      // lib.optionalAttrs buildCargoArtifacts { cargoArtifacts = split.artifacts; }
       // passthru;
     };
 }

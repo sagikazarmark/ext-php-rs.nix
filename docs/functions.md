@@ -159,6 +159,21 @@ The derivation is named `php-<pname>-<version>`, as nixpkgs names its PHP extens
   `php`'s own thread safety is used.
 - `pname`, `version`, `src`: As for `buildRustPackage`.
 - `cargoHash`, `cargoLock` or `cargoDeps`: The Cargo dependencies, as for `buildRustPackage`.
+- `buildCargoArtifacts`: Whether to compile the Cargo dependencies in a derivation of
+  their own, which a change to the source doesn't rebuild: only another PHP, target, thread
+  safety, toolchain, profile, feature set or `Cargo.lock` does. Default: `false`. Enable it
+  for builds that are repeated as the source changes. Each combination keeps its `target/`
+  in the store, compressed (tens to hundreds of megabytes), and CI needs a binary cache to
+  reuse it between jobs. The dependencies are built from the vendored crates in the store
+  and from stubs of `src`: its Cargo manifests, `Cargo.lock` and `.cargo/`, with an empty
+  file for each target and build script. So:
+  - `src` must be a directory, not an archive to unpack, and is read during evaluation.
+    One that is a derivation (`fetchFromGitHub`) is built then (import from derivation).
+  - `patches` and hooks (`postPatch`, `preBuild`, …) that change other source files fail,
+    as do hooks that patch the vendored crates and build scripts that write to them: the
+    build reads them from the store (`cargoDeps`). Changes to the writable vendor copy,
+    including executable-bit changes, are checked after pre-build hooks. Patch `cargoDeps`
+    itself or use the default for those builds.
 - `cargoPackage`: The Cargo package to build. Default: `pname`.
 - `extensionName`: The PHP module's name, as `extension=` loads it. Default: `cargoPackage`.
 - `libName`: The cdylib's name (`[lib] name` in `Cargo.toml`). Default: `cargoPackage`, with `-`
@@ -175,7 +190,9 @@ Its tests are off (`doCheck = false`): a module's tests need PHP's embed SAPI.
 - `lib/php/extensions/<extensionName>.so`: the module.
 - `share/ext-php-rs/bindings.rs`: the Zend API as bindgen generated it, to compare
   builds against other headers.
-- `passthru`: `extensionName`, `phpVersion`, `zts`, `target` and `headers`.
+- `passthru`: `extensionName`, `phpVersion`, `zts`, `target` and `headers`. With
+  `buildCargoArtifacts`, `cargoArtifacts` is the dependency derivation, e.g.
+  `nix build .#hello.cargoArtifacts` to seed a binary cache.
 
 The builds set the rustflags an ext-php-rs module needs (`-undefined dynamic_lookup` on
 macOS, no static C library on musl), on top of a project's own `.cargo/config.toml`.

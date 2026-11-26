@@ -231,6 +231,7 @@ lib.listToAttrs (
         expected = [
           "Cargo.lock"
           "Cargo.toml"
+          "build.rs"
           "src"
         ];
       };
@@ -509,6 +510,7 @@ lib.listToAttrs (
     });
   }
 )
+// import ./cargo-artifacts.nix { inherit pkgs rustPhpPlatform hostTarget; }
 // lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
   # A package for another Nix platform (pkgsCross), with nixpkgs' Rust, loaded into that
   # platform's PHP (without the SAPIs and extensions it does not need) under qemu.

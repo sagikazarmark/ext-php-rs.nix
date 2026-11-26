@@ -1,6 +1,15 @@
 [package]
 name = "ext"
 version.workspace = true
+edition.workspace = true
+publish.workspace = true
 
 [lib]
 crate-type = ["cdylib"]
+
+[dependencies]
+ext-php-rs = "=0.16.4"
+greeting = { path = "../greeting" }
+
+[lints]
+workspace = true

@@ -19,7 +19,10 @@ follows its nixpkgs, so what CI builds and caches is what projects using the fla
   - `example.nix`: the example's builds.
   - `real-world.nix`: the real-world extensions, and `real-world/`: `.phpt` tests for those whose
     releases have none.
-  - `fixtures/features/`: a crate whose output shows the Cargo features it was built with.
+  - `fixtures/features/`: a crate whose output shows the Cargo features it was built with, and
+    whether `src/edited.rs` was among its sources.
+  - `fixtures/workspace/`: an extension in a workspace, which depends on another member with a
+    build script, under lints that an empty crate trips.
   - The scripts that load macOS archives (`load-macos.sh`) and install Linux ones with PIE
     (`pie.sh`, `pie-api.py`). They share `lib/load-lib.sh` with `lib/load-pie-archives.sh`
     (`loadPieArchives`), which loads Linux archives.
@@ -63,6 +66,15 @@ After changing either, run `update-docs` and commit the result: the `docs` check
 - `buildRustPackage`'s build options (`buildAndTestSubdir`, `buildType`, `buildNoDefaultFeatures`,
   `buildFeatures`) in a native and a portable build, each loaded into PHP: a portable build passes
   them to `cargo zigbuild` itself.
+- `buildCargoArtifacts` ([`tests/cargo-artifacts.nix`](tests/cargo-artifacts.nix)), in a
+  native and a portable build of both fixtures (`cargoLock` and a release build of one crate;
+  `cargoHash`, `buildAndTestSubdir` and a debug build of the workspace). Each is built before
+  and after an edit to its source: the two modules share one dependency build, which another
+  PHP, feature set, toolchain or set of dependencies doesn't; neither module's build compiles a
+  dependency or runs bindgen again; and each is built from its own source, not the stubs. A
+  hook that patches the vendored crates fails the build, which reads them from the store,
+  whether it patches a file in `postPatch`, finds the crate from a registered `preBuildHooks`
+  function, or changes only a file's executable bits.
 - The devenv module's outputs.
 - `extensionArgs` on the template and fixtures (`tests/fixtures/extension-args`: a workspace
   version, a `[lib] name`, a `composer.json`; `tests/fixtures/workspace`: a crate in a
