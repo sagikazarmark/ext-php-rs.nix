@@ -1,8 +1,16 @@
-# For extensionArgs (tests/checks.nix): a workspace whose member inherits its version. Never
-# built.
+# For extensionArgs (tests/checks.nix): a workspace whose member inherits its version. And for
+# the split-build checks (tests/cargo-artifacts.nix): an extension that depends on another
+# member with a build script, under lints that an empty crate trips.
 [workspace]
-members = ["crates/ext"]
+members = ["crates/ext", "crates/greeting"]
 resolver = "2"
 
 [workspace.package]
 version = "2.0.0"
+edition = "2021"
+publish = false
+
+[workspace.lints.rust]
+dead_code = "forbid"
+missing_docs = "deny"
+unused_crate_dependencies = "deny"

@@ -112,6 +112,8 @@ generated from the image's `/usr/local/include/php`.
 - Panic messages contain source paths, and Nix's build directory has a random name on macOS.
   Builds remap it to `/build`, so each build platform reproduces its own builds. A module built
   on macOS and the same module built on Linux still differ.
+- With `buildCargoArtifacts`, the archive of compiled dependencies records the build
+  directory, so two builds of it differ wherever that directory's name is random.
 - zig-linked musl modules list `libc.so` as their C library (musl's loader resolves it to
   itself) and contain their own unwinder (no `libgcc_s`).
 - Modules are built against nixpkgs' PHP patch release. A module loads into later patch releases
