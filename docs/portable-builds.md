@@ -110,8 +110,11 @@ generated from the image's `/usr/local/include/php`.
 - ext-php-rs passes the macOS SDK to bindgen whenever its build script runs on macOS, even for
   another target. Portable builds on macOS put an `xcrun` that fails first on `PATH`.
 - Panic messages contain source paths, and Nix's build directory has a random name on macOS.
-  Builds remap it to `/build`, so each build platform reproduces its own builds. A module built
-  on macOS and the same module built on Linux still differ.
+  Builds remap it to `/build`. A module built on macOS and the same module built on Linux still
+  differ, and not every build reproduces on its own platform either: on a Mac without the
+  sandbox, `nix build --rebuild` reports a difference for portable modules for macOS (release
+  and debug builds, with or without `buildCargoArtifacts`), though not for a native debug
+  build or a portable one for x86_64 glibc.
 - With `buildCargoArtifacts`, the archive of compiled dependencies records the build
   directory, so two builds of it differ wherever that directory's name is random.
 - zig-linked musl modules list `libc.so` as their C library (musl's loader resolves it to
