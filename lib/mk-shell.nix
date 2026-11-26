@@ -1,7 +1,9 @@
 # Documented at mkShell in lib/default.nix (docs/functions.md).
 {
+  lib,
+  callPackage,
   mkShell,
-  rustPlatform,
+  llvmPackages,
   rustToolchain,
 }:
 
@@ -24,9 +26,10 @@ mkShell (
       toolchain
       php
       (php.unwrapped or php).dev
-      # libclang, as nixpkgs' builds get it: a build input rather than env, which the shell's
-      # inputDerivation would leave out.
-      rustPlatform.bindgenHook
+      # LIBCLANG_PATH, unless the shell's env sets it.
+      (callPackage ./setup-env-hook.nix { } {
+        LIBCLANG_PATH = "${lib.getLib llvmPackages.libclang}/lib";
+      })
     ]
     ++ packages;
   }

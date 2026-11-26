@@ -15,7 +15,7 @@
 #   sharedLibrary                file extension
 #   nativeBuildInputs            joined with the package's own
 #   setupEnv                     the variables that point at the PHP and libclang to build
-#                                with, which a setup hook sets (see setupEnvHook)
+#                                with, which a setup hook sets (../setup-env-hook.nix)
 #   canLoadIntoPhp               whether the install check loads the module into `php`
 # and optionally (empty by default):
 #   env                          joined with the package's own
@@ -28,8 +28,6 @@
   lib,
   callPackage,
   rustPlatform,
-  makeSetupHook,
-  writeText,
 }:
 
 let
@@ -95,19 +93,8 @@ lib.extendMkDerivation {
           buildType;
       outDir = "target/${build.cargoTripleDir}/${profileDir}";
       libFile = "lib${libName}${build.sharedLibrary}";
-      # The build's setupEnv, each variable unless the package's env sets it. A build input
-      # rather than env: nixpkgs builds a derivation's inputDerivation (everything it builds
-      # with, to fetch or cache without building it) from its arguments without env, so the
-      # PHP headers and libclang would be left out.
-      setupEnvHook = makeSetupHook { name = "ext-php-rs-setup-env"; } (
-        writeText "ext-php-rs-setup-env.sh" (
-          lib.concatStrings (
-            lib.mapAttrsToList (name: value: ''
-              export ${name}="''${${name}:-${value}}"
-            '') build.setupEnv
-          )
-        )
-      );
+      # The build's setupEnv, each variable unless the package's env sets it.
+      setupEnvHook = callPackage ../setup-env-hook.nix { } build.setupEnv;
       rustflags = [
         # Panic locations name the source files; the build directory's name is random on macOS.
         "--remap-path-prefix=$NIX_BUILD_TOP=/build"

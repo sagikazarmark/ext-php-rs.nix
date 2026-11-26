@@ -66,7 +66,7 @@ After changing either, run `update-docs` and commit the result: the `docs` check
 - The devenv module's outputs.
 - Each build's `inputDerivation` (everything it builds with, without building it): a portable
   build's has the PHP headers and zig's libclang, a native build's PHP's `dev` output, and
-  `mkShell`'s libclang.
+  `mkShell`'s libclang. `mkShell` sets `LIBCLANG_PATH` unless the shell's `env` does.
 - `extensionArgs` on the template and fixtures (`tests/fixtures/extension-args`: a workspace
   version, a `[lib] name`, a `composer.json`; `tests/fixtures/workspace`: a crate in a
   workspace).

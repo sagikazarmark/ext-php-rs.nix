@@ -393,7 +393,19 @@ lib.listToAttrs (
       has portable ${nts.headers} ${closure nts}
       has portable ${rustPhpPlatform.zigLibclang} ${closure nts}
       has native ${native.headers} ${closure native}
-      has mkShell ${rustPhpPlatform.rustPlatform.bindgenHook.libclang} ${closure shell}
+      has mkShell ${lib.getLib pkgs.llvmPackages.libclang} ${closure shell}
+      touch "$out"
+    '';
+
+  # mkShell sets LIBCLANG_PATH unless the shell's env does. Building a shell dumps its
+  # environment, after its setup hooks.
+  mk-shell-env =
+    let
+      shell = args: rustPhpPlatform.mkShell ({ php = php84; } // args);
+    in
+    runCommand "ext-php-rs-mk-shell-env" { } ''
+      grep -qx 'declare -x LIBCLANG_PATH="${lib.getLib pkgs.llvmPackages.libclang}/lib"' ${shell { }}
+      grep -qx 'declare -x LIBCLANG_PATH="/custom/lib"' ${shell { env.LIBCLANG_PATH = "/custom/lib"; }}
       touch "$out"
     '';
 
