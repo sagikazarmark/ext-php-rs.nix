@@ -60,6 +60,10 @@ After changing either, run `update-docs` and commit the result: the `docs` check
 - On x86_64 Linux: the example built with `pkgsCross` for aarch64 Linux, loaded into that
   platform's PHP with qemu.
 - The example's 36 PIE archives (PHP 8.4, 8.5 and 8.6).
+- `buildRustPhpExtensions`' keys, variants and the duplicates it refuses, `buildPieRelease`'s
+  archives being its release builds (`buildRustPhpExtension` for each combination), and
+  `collectExtensions`' filters (evaluated only). `mkExtensionInputs`' closure: each extension's
+  PHP headers and the Cargo dependencies, without evaluating the source.
 - `buildRustPackage`'s build options (`buildAndTestSubdir`, `buildType`, `buildNoDefaultFeatures`,
   `buildFeatures`) in a native and a portable build, each loaded into PHP: a portable build passes
   them to `cargo zigbuild` itself.

@@ -95,6 +95,33 @@ The cache only has what this flake's nixpkgs builds, so take nixpkgs from this f
 
 See [the function reference](docs/functions.md) for every function and argument.
 
+### Building a matrix
+
+`buildRustPhpExtensions` builds the portable modules of every combination of PHP version, thread
+safety, target and variant (extra build arguments, such as a debug build) as an attribute set, for
+Docker images, test matrices, or `nix build` of one of them. `collectExtensions` lists some of
+them, and `mkExtensionInputs` makes a derivation of everything they build with but their source,
+to cache or to fetch in a Docker layer of its own:
+
+```nix
+extensions = rustPhpPlatform.buildRustPhpExtensions {
+  inherit args;
+  php = [ pkgs.php84 pkgs.php85 ];
+  variants = {
+    release = { };
+    debug = { buildType = "debug"; };
+  };
+};
+# extensions.php84.zts.x86_64-linux-glibc.debug
+
+pie = rustPhpPlatform.mkPieRelease {
+  extensions = rustPhpPlatform.collectExtensions extensions { variant = "release"; };
+};
+```
+
+The [`mkExtensionInputs` reference](docs/functions.md#rustphpplatformmkextensioninputs) has a
+`Dockerfile` that builds a module this way.
+
 ### Publishing an extension for Nix users
 
 `mkPhpExtensionsOverlay` makes an overlay that adds extensions to every PHP in nixpkgs (`php`,

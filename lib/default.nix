@@ -121,6 +121,170 @@ lib.makeScope newScope (
     buildRustPhpExtension = self.callPackage ./build-extension { };
 
     /**
+      Builds one extension for every combination of PHP version, thread safety, target and
+      variant: portable builds of `args` (`buildRustPhpExtension` with a `target`), as a nested
+      attribute set.
+
+      ```
+      <php>.<threadSafety>.<target>.<variant>
+      php84.zts.x86_64-linux-glibc.release
+      ```
+
+      - `<php>`: `php` followed by the PHP's major and minor version (`php84`), whatever attribute
+        the PHP came from: a portable build is for a PHP minor.
+      - `<threadSafety>`: `nts` or `zts`.
+      - `<target>`: the target's name (`x86_64-linux-glibc`, `aarch64-darwin`), including for a
+        [`mkTarget`](#rustphpplatformmktarget) one.
+      - `<variant>`: a name of `variants`, `release` by default.
+
+      Two PHPs of the same minor, or two targets of the same name, are refused. Each extension is
+      evaluated only when it's used, so a project can list more than it builds. Builds without
+      a target are `buildRustPhpExtension`'s (or
+      [`mkPhpExtensionsOverlay`](#ext-php-rslibmkphpextensionsoverlay)'s), for each PHP itself.
+
+      [`collectExtensions`](#rustphpplatformcollectextensions) makes a list of them, and
+      [`buildPieRelease`](#rustphpplatformbuildpierelease) is the release variant of the same
+      builds as PIE archives: with the same `args`, they're the same derivations.
+
+      # Inputs
+
+      - `args`: `buildRustPhpExtension`'s arguments, without `php`, `target` and `threadSafety`.
+      - `php`: The PHPs to build for (a list).
+      - `targets`: The targets to build for. Default: every one of [`targets`](#rustphpplatformtargets).
+      - `threadSafety`: Default: `[ "nts" "zts" ]`.
+      - `variants`: Builds of each combination, by name: each one more `buildRustPhpExtension`
+        arguments, merged over `args` (`args // variant`, so a variant's `buildFeatures` replace
+        those of `args`). Default: `{ release = { }; }`, `args` alone.
+
+      # Example
+
+      ```nix
+      extensions = rustPhpPlatform.buildRustPhpExtensions {
+        args = ext-php-rs.lib.extensionArgs { root = ./.; };
+        php = [ pkgs.php84 pkgs.php85 ];
+        targets = with rustPhpPlatform.targets; [ x86_64-linux-glibc aarch64-linux-glibc ];
+        variants = {
+          release = { };
+          debug = { buildType = "debug"; };
+          debug-diagnostics = { buildType = "debug"; buildFeatures = [ "diagnostics" ]; };
+        };
+      };
+      # nix build .#extensions.php84.zts.x86_64-linux-glibc.debug, from legacyPackages (which
+      # `nix flake check` and `nix flake show` don't list).
+      legacyPackages.${system} = { inherit extensions; };
+      # The release variant as PIE archives: the same derivations.
+      packages.${system}.pie = rustPhpPlatform.mkPieRelease {
+        extensions = rustPhpPlatform.collectExtensions extensions { variant = "release"; };
+      };
+      ```
+    */
+    buildRustPhpExtensions = self.callPackage ./build-extensions.nix { };
+
+    /**
+      The extensions of a [`buildRustPhpExtensions`](#rustphpplatformbuildrustphpextensions) set
+      as a list, filtered by any of its levels and by the target's OS, CPU and C library:
+      `collectExtensions extensions filter`.
+
+      Also available as [`ext-php-rs.lib.collectExtensions`](#ext-php-rslibcollectextensions),
+      without a package set.
+
+      # Inputs
+
+      - `extensions`: A `buildRustPhpExtensions` set, or any set of extensions built with a
+        `target`, of its shape (`<php>.<threadSafety>.<target>.<variant>`).
+      - `filter`: An attribute set; `{ }` collects every extension. Each attribute is a value or a
+        list of values, of which the extension must have one:
+        - `php`: the key of the PHP, such as `"php84"`
+        - `threadSafety`: `"nts"` or `"zts"`
+        - `target`: the target's name, such as `"x86_64-linux-glibc"`
+        - `variant`: the variant's name
+        - `arch`, `os`, `libc`: the target's (as [`mkTarget`](#rustphpplatformmktarget) takes
+          them: `"aarch64"`, `"linux"`, `"musl"`)
+
+      # Examples
+
+      ```nix
+      rustPhpPlatform.collectExtensions extensions { variant = "release"; }
+      ```
+
+      ```nix
+      # The debug builds for glibc, for PHP 8.4 and 8.5.
+      rustPhpPlatform.collectExtensions extensions {
+        variant = "debug";
+        libc = "glibc";
+        php = [ "php84" "php85" ];
+      }
+      ```
+    */
+    collectExtensions = import ./collect-extensions.nix { inherit lib; };
+
+    /**
+      A derivation that depends on everything some extensions build with but their source: the
+      Rust toolchain, zig, the PHP headers, the Cargo dependencies, …, each extension's
+      `inputDerivation` without `src`. Building it fetches (or builds) all of that, so that
+      building the extensions afterwards only compiles them: a Docker layer that changes only
+      when the dependencies do, a CI cache to warm up, a binary cache to push to.
+
+      The source isn't evaluated either, so the file set of
+      [`extensionArgs`](#rustphpplatformextensionargs) needn't exist yet: Nix evaluates the
+      inputs from `flake.nix`, `flake.lock`, `Cargo.toml`, `Cargo.lock` and `composer.json`
+      alone. That needs `cargoLock` (as `extensionArgs` sets it) or `cargoDeps`: with
+      `cargoHash`, `buildRustPackage` vendors the dependencies from the source.
+
+      The output is a file with the path of each `inputDerivation`.
+
+      # Inputs
+
+      - `extensions`: The extensions (a list), such as
+        [`collectExtensions`](#rustphpplatformcollectextensions)'s.
+      - `name`: Default: `"php-extension-inputs"`.
+
+      # Example
+
+      In `flake.nix`, with `extensions` from
+      [`buildRustPhpExtensions`](#rustphpplatformbuildrustphpextensions) in `legacyPackages`:
+
+      ```nix
+      # Everything the Linux builds need.
+      packages.${system}.extension-inputs = rustPhpPlatform.mkExtensionInputs {
+        extensions = rustPhpPlatform.collectExtensions extensions { os = "linux"; };
+      };
+      ```
+
+      A `Dockerfile` that builds one of them for PHP 8.4 ZTS and the image's CPU, then installs it
+      into PHP's official image. Nix runs on the build machine's CPU (`$BUILDPLATFORM`) and
+      cross-compiles for the image's. The first `nix build` runs again only when the files it's
+      given change, for images of any CPU, and the second then only compiles the extension. Leave
+      `result` and `target` out with `.dockerignore`.
+
+      ```dockerfile
+      FROM --platform=$BUILDPLATFORM docker.io/nixos/nix:latest AS build
+      RUN printf '%s\n' \
+            'experimental-features = nix-command flakes' \
+            'extra-substituters = https://ext-php-rs.cachix.org' \
+            'extra-trusted-public-keys = ext-php-rs.cachix.org-1:PtGECZQzLu6AvwSPiiOkfXYVvsb7sd0Ckc8gyvVhfrU=' \
+            >> /etc/nix/nix.conf
+      WORKDIR /src
+      # What Nix evaluates the inputs from: not the extension's source.
+      COPY flake.nix flake.lock Cargo.toml Cargo.lock composer.json ./
+      RUN nix build .#extension-inputs --no-link
+      COPY . .
+      # The image's CPU, amd64 or arm64: declared here, so that the layers above are the same for
+      # every image.
+      ARG TARGETARCH
+      RUN arch=$([ "$TARGETARCH" = arm64 ] && echo aarch64 || echo x86_64) \
+          && nix build ".#extensions.php84.zts.$arch-linux-glibc.release" \
+          && cp result/lib/php/extensions/hello.so /hello.so
+
+      FROM docker.io/library/php:8.4-zts-bookworm
+      COPY --from=build /hello.so /tmp/
+      RUN mv /tmp/hello.so "$(php -r 'echo ini_get("extension_dir");')/" \
+          && docker-php-ext-enable hello
+      ```
+    */
+    mkExtensionInputs = self.callPackage ./extension-inputs.nix { };
+
+    /**
       Reads `buildRustPhpExtension`'s arguments from a project's files:
       - `pname` and `version`: from `Cargo.toml`'s `[package]` (a version inherited from the
         workspace too).

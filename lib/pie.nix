@@ -5,7 +5,8 @@
 {
   lib,
   runCommand,
-  buildRustPhpExtension,
+  buildRustPhpExtensions,
+  collectExtensions,
   targets,
 }:
 
@@ -79,7 +80,8 @@ let
       '';
 
   # A release of one extension: buildRustPhpExtension's `args`, built for every combination of
-  # `php`, `targets` and `threadSafety`, through mkPieRelease.
+  # `php`, `targets` and `threadSafety` (buildRustPhpExtensions' release variant), through
+  # mkPieRelease.
   buildPieRelease =
     {
       args,
@@ -92,25 +94,14 @@ let
       name ? null,
     }:
     let
-      extensions =
-        lib.mapCartesianProduct
-          (
-            {
-              php,
-              target,
-              threadSafety,
-            }:
-            buildRustPhpExtension (
-              args
-              // {
-                inherit php target threadSafety;
-              }
-            )
-          )
-          {
-            inherit php threadSafety;
-            target = targets;
-          };
+      extensions = collectExtensions (buildRustPhpExtensions {
+        inherit
+          args
+          php
+          targets
+          threadSafety
+          ;
+      }) { };
     in
     assert lib.assertMsg (
       extensions != [ ]
