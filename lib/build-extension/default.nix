@@ -9,7 +9,8 @@
 # apart; the rest is the same for both, here.
 #
 # What a build returns:
-#   headers, zts                 the PHP headers built against, and their thread safety
+#   headers, threadSafety        the PHP headers built against, and their thread safety
+#                                ("nts" or "zts")
 #   darwin, rustTarget,          the platform the module is for: macOS or not, its rustc
 #   cargoTripleDir,              target, Cargo's directory under target/, and the cdylib's
 #   sharedLibrary                file extension
@@ -40,7 +41,7 @@ lib.extendMkDerivation {
   excludeDrvArgNames = [
     "php"
     "target"
-    "zts"
+    "threadSafety"
     "cargoPackage"
     "libName"
     "allowedLibraries"
@@ -53,8 +54,8 @@ lib.extendMkDerivation {
       # target, the PHP version to configure for it.
       php,
       target ? null,
-      # Thread safety, for a target only (otherwise `php`'s own).
-      zts ? null,
+      # Thread safety, "nts" or "zts", for a target only (otherwise `php`'s own).
+      threadSafety ? null,
       cargoPackage ? finalAttrs.pname,
       # The PHP module name, as `extension=` loads it.
       extensionName ? cargoPackage,
@@ -75,7 +76,7 @@ lib.extendMkDerivation {
         inherit
           php
           target
-          zts
+          threadSafety
           extensionName
           module
           allowedLibraries
@@ -185,7 +186,7 @@ lib.extendMkDerivation {
         );
 
       passthru = {
-        inherit (build) headers zts;
+        inherit (build) headers threadSafety;
         inherit extensionName target;
         phpVersion = (php.unwrapped or php).version;
       }

@@ -140,18 +140,18 @@ let
       inherit (rustPhpPlatform.targets) x86_64-linux-glibc aarch64-linux-musl aarch64-darwin;
       build = args: rustPhpPlatform.buildRustPhpExtension (extension.args // args);
       portable =
-        target: zts:
+        target: threadSafety:
         build {
           php = php84;
-          inherit target zts;
+          inherit target threadSafety;
         };
     in
     {
       native = build { php = php84; };
       portable = {
-        x86_64-linux-glibc-nts = portable x86_64-linux-glibc false;
-        aarch64-linux-musl-zts = portable aarch64-linux-musl true;
-        aarch64-darwin-nts = portable aarch64-darwin false;
+        x86_64-linux-glibc-nts = portable x86_64-linux-glibc "nts";
+        aarch64-linux-musl-zts = portable aarch64-linux-musl "zts";
+        aarch64-darwin-nts = portable aarch64-darwin "nts";
       };
     };
 
