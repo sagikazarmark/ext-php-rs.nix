@@ -26,8 +26,12 @@ parse_asset() {
 # official image of that PHP and its Docker platform.
 image_for() {
   local php=$1 ts=$2 arch=$3 libc=$4 variant=cli distribution=trixie
-  if [ "$(printf '%s\n' 8.6 "$php" | sort -V | head -n 1)" = 8.6 ]; then
-    # From 8.6 the images are ZTS only, without a -zts variant (docker-library/php#1686).
+  if [ "$php" = 8.6 ]; then
+    # 8.6's cli images are ZTS (docker-library/php#1686); its nts variant is NTS
+    # (docker-library/php#1722).
+    variant=$ts
+  elif [ "$(printf '%s\n' 8.6 "$php" | sort -V | head -n 1)" = 8.6 ]; then
+    # After 8.6 the images are ZTS only, without a -zts or -nts variant.
     if [ "$ts" = nts ]; then
       echo "$(basename "$0"): PHP $php has no NTS official image (docker-library/php#1686)" >&2
       return 1

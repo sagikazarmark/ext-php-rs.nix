@@ -540,8 +540,9 @@ lib.makeScope newScope (
       - The options select the archives. `--arch` is this machine's CPU by default; another
         needs emulation (Docker Desktop's, or QEMU's binfmt handlers).
 
-      `DOCKER` is the command to run: `docker` by default, `podman` works too. PHP 8.6's official
-      images are ZTS only, so its NTS archives are skipped. It fails if an archive's tests fail,
+      `DOCKER` is the command to run: `docker` by default, `podman` works too. PHP 8.6's NTS
+      archives go into its `nts` images (`php:8.6-nts-alpine`); later PHPs' official images are
+      ZTS only, so their NTS archives are skipped. It fails if an archive's tests fail,
       or if no archive is selected.
 
       # Example
