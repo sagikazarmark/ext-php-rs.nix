@@ -47,6 +47,12 @@
   extensionArgs = import ./extension-args.nix { inherit lib; };
 
   /**
+    The extensions of a `buildRustPhpExtensions` set as a list, filtered: the same as
+    [`rustPhpPlatform.collectExtensions`](#rustphpplatformcollectextensions).
+  */
+  collectExtensions = import ./collect-extensions.nix { inherit lib; };
+
+  /**
     Makes an overlay that adds extensions to every PHP of nixpkgs (`php`, `php84`, `php85`, …),
     the way nixpkgs adds its own: to `php.extensions`. Each extension is built against the PHP
     that loads it, and users load it like one of nixpkgs':

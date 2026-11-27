@@ -40,6 +40,33 @@ let
   ];
   pie = example.pie phps;
 
+  # The example for two PHPs, NTS and ZTS, a custom target and one of `targets`, in three
+  # variants: 24 extensions (only evaluated).
+  matrix = rustPhpPlatform.buildRustPhpExtensions {
+    inherit (example) args;
+    php = [
+      php84
+      php85
+    ];
+    targets = [
+      (rustPhpPlatform.mkTarget {
+        arch = "x86_64";
+        glibc = "2.31";
+      })
+      rustPhpPlatform.targets.aarch64-darwin
+    ];
+    variants = {
+      release = { };
+      debug = {
+        buildType = "debug";
+      };
+      debug-shout = {
+        buildType = "debug";
+        buildFeatures = [ "shout" ];
+      };
+    };
+  };
+
   # Checks that only evaluate: each test's expr must equal its expected value, and the check
   # fails to evaluate with every one that does not.
   evalTests =
@@ -388,6 +415,292 @@ lib.listToAttrs (
         expected = pie.drvPath;
       };
     };
+
+  # buildRustPhpExtensions: its keys (the PHP's minor, the target's name, a custom target's
+  # too), its variants (merged over args), what it refuses, and buildPieRelease's archives, which
+  # are its release builds: buildRustPhpExtension for each combination, as before it.
+  extension-matrix =
+    let
+      inherit (rustPhpPlatform) buildRustPhpExtensions targets;
+      custom = rustPhpPlatform.mkTarget {
+        arch = "x86_64";
+        glibc = "2.31";
+      };
+      build =
+        php: target: threadSafety:
+        rustPhpPlatform.buildRustPhpExtension (
+          example.args
+          // {
+            inherit php target threadSafety;
+          }
+        );
+      defaults = buildRustPhpExtensions {
+        inherit (example) args;
+        php = phps;
+      };
+      drvPaths = extensions: lib.sort lib.lessThan (map (extension: extension.drvPath) extensions);
+      refused =
+        args:
+        !(builtins.tryEval (
+          lib.concatMapStrings (extension: extension.drvPath) (
+            rustPhpPlatform.collectExtensions (buildRustPhpExtensions (
+              {
+                inherit (example) args;
+                php = [ php84 ];
+              }
+              // args
+            )) { }
+          )
+        )).success;
+    in
+    evalTests "extension-matrix" {
+      testKeys = {
+        expr = lib.mapAttrs (_: lib.mapAttrs (_: lib.mapAttrs (_: lib.attrNames))) matrix;
+        expected = lib.genAttrs [ "php84" "php85" ] (
+          _:
+          lib.genAttrs [ "nts" "zts" ] (
+            _:
+            lib.genAttrs [ "aarch64-darwin" "x86_64-linux-glibc" ] (_: [
+              "debug"
+              "debug-shout"
+              "release"
+            ])
+          )
+        );
+      };
+      testCustomTarget = {
+        expr = matrix.php84.nts.x86_64-linux-glibc.release.target.glibc;
+        expected = "2.31";
+      };
+      testDefaults = {
+        expr = {
+          php = lib.attrNames defaults;
+          threadSafety = lib.attrNames defaults.php86;
+          targets = lib.attrNames defaults.php86.zts;
+          variants = lib.attrNames defaults.php86.zts.aarch64-linux-musl;
+        };
+        expected = {
+          php = [
+            "php84"
+            "php85"
+            "php86"
+          ];
+          threadSafety = [
+            "nts"
+            "zts"
+          ];
+          targets = lib.attrNames targets;
+          variants = [ "release" ];
+        };
+      };
+      testVariants =
+        let
+          variants = matrix.php85.zts.aarch64-darwin;
+        in
+        {
+          expr = {
+            options = lib.mapAttrs (_: extension: {
+              buildType = extension.cargoBuildType;
+              features = extension.cargoBuildFeatures;
+            }) variants;
+            derivations = lib.length (lib.unique (drvPaths (lib.attrValues variants)));
+          };
+          expected = {
+            options = {
+              release = {
+                buildType = "release";
+                features = [ ];
+              };
+              debug = {
+                buildType = "debug";
+                features = [ ];
+              };
+              debug-shout = {
+                buildType = "debug";
+                features = [ "shout" ];
+              };
+            };
+            derivations = 3;
+          };
+        };
+      testRelease = {
+        expr = matrix.php85.zts.aarch64-darwin.release.drvPath;
+        expected = (build php85 targets.aarch64-darwin "zts").drvPath;
+      };
+      testPieRelease =
+        let
+          expected = drvPaths (
+            lib.mapCartesianProduct
+              (
+                {
+                  php,
+                  target,
+                  ts,
+                }:
+                build php target ts
+              )
+              {
+                php = phps;
+                target = lib.attrValues targets;
+                ts = [
+                  "nts"
+                  "zts"
+                ];
+              }
+          );
+        in
+        {
+          expr = {
+            pie = drvPaths (map (archive: archive.extension) (lib.attrValues pie.archives));
+            matrix = drvPaths (rustPhpPlatform.collectExtensions defaults { });
+          };
+          expected = {
+            pie = expected;
+            matrix = expected;
+          };
+        };
+      testDuplicatePhp = {
+        expr = refused {
+          php = [
+            php84
+            php84
+          ];
+        };
+        expected = true;
+      };
+      testDuplicateTarget = {
+        expr = refused {
+          targets = [
+            targets.x86_64-linux-glibc
+            custom
+          ];
+        };
+        expected = true;
+      };
+      testUnknownThreadSafety = {
+        expr = refused { threadSafety = [ "yes" ]; };
+        expected = true;
+      };
+      testVariantSetsMatrixArgument = {
+        expr = refused { variants.bad.threadSafety = "zts"; };
+        expected = true;
+      };
+    };
+
+  # collectExtensions: the extensions of a buildRustPhpExtensions set, in its order, filtered by
+  # any level and by the target's arch, os and libc, each a value or a list.
+  collect-extensions =
+    let
+      collect =
+        filter:
+        map (
+          extension:
+          lib.concatStringsSep "-" [
+            "php${lib.versions.majorMinor extension.phpVersion}"
+            extension.threadSafety
+            extension.target.name
+            extension.cargoBuildType
+          ]
+          + lib.concatMapStrings (feature: "+${feature}") extension.cargoBuildFeatures
+        ) (rustPhpPlatform.collectExtensions matrix filter);
+    in
+    evalTests "collect-extensions" {
+      testAll = {
+        expr = lib.length (collect { });
+        expected = 24;
+      };
+      testOne = {
+        expr = collect {
+          php = "php84";
+          threadSafety = "nts";
+          target = "aarch64-darwin";
+        };
+        expected = [
+          "php8.4-nts-aarch64-darwin-debug"
+          "php8.4-nts-aarch64-darwin-debug+shout"
+          "php8.4-nts-aarch64-darwin-release"
+        ];
+      };
+      testVariantAndLibc = {
+        expr = collect {
+          variant = "debug";
+          libc = "glibc";
+        };
+        expected = [
+          "php8.4-nts-x86_64-linux-glibc-debug"
+          "php8.4-zts-x86_64-linux-glibc-debug"
+          "php8.5-nts-x86_64-linux-glibc-debug"
+          "php8.5-zts-x86_64-linux-glibc-debug"
+        ];
+      };
+      testLists = {
+        expr = collect {
+          php = [ "php85" ];
+          os = "darwin";
+          threadSafety = "zts";
+          variant = [
+            "release"
+            "debug-shout"
+          ];
+        };
+        expected = [
+          "php8.5-zts-aarch64-darwin-debug+shout"
+          "php8.5-zts-aarch64-darwin-release"
+        ];
+      };
+      testArch = {
+        expr = collect {
+          arch = "x86_64";
+          php = "php84";
+          variant = "release";
+        };
+        expected = [
+          "php8.4-nts-x86_64-linux-glibc-release"
+          "php8.4-zts-x86_64-linux-glibc-release"
+        ];
+      };
+      testNone = {
+        expr = collect { php = "php86"; };
+        expected = [ ];
+      };
+      testUnknownFilter = {
+        expr =
+          (builtins.tryEval (collect {
+            libC = "glibc";
+          })).success;
+        expected = false;
+      };
+    };
+
+  # mkExtensionInputs: the inputDerivations of extensions without their source, which it doesn't
+  # even evaluate. They have the Cargo dependencies and each extension's PHP headers (by PHP
+  # version and thread safety).
+  extension-inputs =
+    let
+      extensions = rustPhpPlatform.collectExtensions (rustPhpPlatform.buildRustPhpExtensions {
+        args = example.args // {
+          src = throw "mkExtensionInputs evaluated the source";
+        };
+        php = [
+          php84
+          php85
+        ];
+        targets = [ rustPhpPlatform.targets.aarch64-linux-musl ];
+      }) { };
+      closure = pkgs.writeClosure [ (rustPhpPlatform.mkExtensionInputs { inherit extensions; }) ];
+      has = path: ''
+        if ! grep -qx ${path} ${closure}; then
+          echo "mkExtensionInputs's closure does not have ${path}" >&2
+          exit 1
+        fi
+      '';
+    in
+    assert lib.length (lib.unique (map (extension: extension.headers.drvPath) extensions)) == 4;
+    runCommand "ext-php-rs-extension-inputs" { } ''
+      ${has (lib.head extensions).cargoDeps}
+      ${lib.concatMapStrings (extension: has extension.headers) extensions}
+      touch "$out"
+    '';
 
   # Each build's inputDerivation (everything it builds with, to fetch or cache without building
   # it) has the PHP headers it builds against, and a portable build's zig's libclang, so it
