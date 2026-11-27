@@ -13,13 +13,13 @@
 
 {
   php,
-  zts,
+  threadSafety,
   allowedLibraries,
   ...
 }:
 
-assert lib.assertMsg (zts == null)
-  "buildRustPhpExtension: zts is for a target only; without one, the module has php's thread safety";
+assert lib.assertMsg (threadSafety == null)
+  "buildRustPhpExtension: threadSafety is for a target only; without one, the module has php's thread safety";
 assert lib.assertMsg (
   allowedLibraries == null
 ) "buildRustPhpExtension: allowedLibraries is for a target only";
@@ -40,7 +40,7 @@ let
           passthru = {
             inherit (unwrapped) version;
             target = null;
-            zts = unwrapped.ztsSupport or false;
+            ztsSupport = unwrapped.ztsSupport or false;
           };
         }
         ''
@@ -54,7 +54,7 @@ let
 in
 {
   inherit headers;
-  zts = unwrapped.ztsSupport or false;
+  threadSafety = if unwrapped.ztsSupport or false then "zts" else "nts";
 
   darwin = stdenv.hostPlatform.isDarwin;
   rustTarget = stdenv.hostPlatform.rust.rustcTarget;

@@ -80,7 +80,7 @@ The cache only has what this flake's nixpkgs builds, so take nixpkgs from this f
         hello-musl = rustPhpPlatform.buildRustPhpExtension (args // {
           php = pkgs.php84;
           target = rustPhpPlatform.targets.aarch64-linux-musl;
-          zts = true;
+          threadSafety = "zts";
         });
 
         # PIE archives for every target, NTS and ZTS, for PHP 8.4 and 8.5: 24 archives.

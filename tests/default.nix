@@ -112,7 +112,7 @@ in
                 withRustBin.rustPhpPlatform.targets.${
                   if platform.isDarwin then "${cpu}-darwin" else "${cpu}-linux-glibc"
                 };
-              zts = false;
+              threadSafety = "nts";
             }
           );
 
@@ -124,7 +124,7 @@ in
               // {
                 php = withOverlay.php84;
                 target = withOverlay.rustPhpPlatform.targets.aarch64-linux-musl;
-                zts = false;
+                threadSafety = "nts";
               }
             );
           in

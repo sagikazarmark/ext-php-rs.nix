@@ -16,8 +16,8 @@
 {
   php,
   target,
-  # Thread safety (ZTS) of the configured PHP.
-  zts,
+  # Thread safety (ZTS) of the configured PHP, as nixpkgs' PHP's ztsSupport.
+  ztsSupport,
 }:
 
 let
@@ -25,9 +25,9 @@ let
   # The shell of the build platform, which runs the scripts.
   inherit (stdenv) shell;
 in
-assert lib.assertMsg (lib.isBool zts) "mkPhpHeaders: zts must be true or false";
+assert lib.assertMsg (lib.isBool ztsSupport) "mkPhpHeaders: ztsSupport must be true or false";
 stdenv.mkDerivation {
-  pname = "php-headers-${target.name}-${if zts then "zts" else "nts"}";
+  pname = "php-headers-${target.name}-${if ztsSupport then "zts" else "nts"}";
   inherit (unwrapped) version src;
 
   # Always a cross configure, even for the build platform's own CPU, so the result does
@@ -41,7 +41,7 @@ stdenv.mkDerivation {
     "--disable-cgi"
     "--disable-phpdbg"
     "--without-pcre-jit"
-    (lib.enableFeature zts "zts")
+    (lib.enableFeature ztsSupport "zts")
     # A configure check that runs a program, which a cross configure cannot, so it would
     # answer no and leave out ZEND_CHECK_STACK_LIMIT (and the executor globals' call
     # stack fields). The stack grows downwards on every target here.
@@ -72,8 +72,10 @@ stdenv.mkDerivation {
   dontFixup = true;
 
   passthru = {
-    inherit target zts;
+    inherit target ztsSupport;
   };
 
-  meta.description = "PHP ${unwrapped.version} headers configured for ${target.name} (${if zts then "ZTS" else "NTS"})";
+  meta.description = "PHP ${unwrapped.version} headers configured for ${target.name} (${
+    if ztsSupport then "ZTS" else "NTS"
+  })";
 }

@@ -48,8 +48,8 @@ in
   # The PHP version to configure for the target.
   php,
   target,
-  # Thread safety.
-  zts,
+  # Thread safety: "nts" or "zts".
+  threadSafety,
   extensionName,
   # The installed module's path.
   module,
@@ -57,21 +57,25 @@ in
   ...
 }:
 
-assert lib.assertMsg (lib.isBool zts) "buildRustPhpExtension: a target needs zts = true or false";
+assert lib.assertMsg (lib.elem threadSafety [
+  "nts"
+  "zts"
+]) "buildRustPhpExtension: a target needs threadSafety = \"nts\" or \"zts\"";
 
 let
+  ztsSupport = threadSafety == "zts";
   darwin = target.os == "darwin";
   # The toolchain with the target's standard library. buildRustPackage puts the scope's own
   # cargo and rustc on PATH as well, which may not have it.
   toolchain = rustToolchainFor target;
   allowed =
     if allowedLibraries != null then allowedLibraries else defaultAllowedLibraries.${target.libc};
-  phpZts = (php.unwrapped or php).ztsSupport or false;
-  headers = mkPhpHeaders { inherit php target zts; };
+  phpZtsSupport = (php.unwrapped or php).ztsSupport or false;
+  headers = mkPhpHeaders { inherit php target ztsSupport; };
   buildRust = stdenv.buildPlatform.rust;
 in
 {
-  inherit headers zts darwin;
+  inherit headers threadSafety darwin;
 
   inherit (target) rustTarget sharedLibrary;
   cargoTripleDir = target.rustTarget;
@@ -217,5 +221,5 @@ in
     stdenv.buildPlatform.canExecute stdenv.hostPlatform
     && target.system == stdenv.hostPlatform.system
     && (darwin || (target.libc == "musl") == stdenv.hostPlatform.isMusl)
-    && zts == phpZts;
+    && ztsSupport == phpZtsSupport;
 }

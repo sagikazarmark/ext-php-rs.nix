@@ -20,9 +20,7 @@ let
       inherit (extension) target;
     in
     assert lib.assertMsg (target != null) "pieAssetName: ${extension.name} is not built for a target";
-    "php_${extension.extensionName}-${extension.version}_php${lib.versions.majorMinor extension.phpVersion}-${target.pieArch}-${target.os}-${target.libc}-${
-      if extension.zts then "zts" else "nts"
-    }.tgz";
+    "php_${extension.extensionName}-${extension.version}_php${lib.versions.majorMinor extension.phpVersion}-${target.pieArch}-${target.os}-${target.libc}-${extension.threadSafety}.tgz";
 
   # One archive and its .sha256 file, from a module built with a target.
   mkPieArchive =
@@ -100,20 +98,18 @@ let
             {
               php,
               target,
-              ts,
+              threadSafety,
             }:
             buildRustPhpExtension (
               args
               // {
-                inherit php target;
-                zts = ts == "zts";
+                inherit php target threadSafety;
               }
             )
           )
           {
-            inherit php;
+            inherit php threadSafety;
             target = targets;
-            ts = threadSafety;
           };
     in
     assert lib.assertMsg (

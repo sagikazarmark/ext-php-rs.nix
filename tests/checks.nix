@@ -263,24 +263,21 @@ lib.listToAttrs (
       };
     };
 
-  # Arguments of the other kind of build are refused when evaluated: zts and allowedLibraries
-  # without a target, and a target without zts = true or false.
+  # Arguments of the other kind of build are refused when evaluated: threadSafety and
+  # allowedLibraries without a target, and a target without threadSafety = "nts" or "zts".
   arguments =
     let
       inherit (rustPhpPlatform.targets) aarch64-linux-musl;
-      evaluates =
-        args:
-        (builtins.tryEval
-          (rustPhpPlatform.buildRustPhpExtension (example.args // { php = php84; } // args)).drvPath
-        ).success;
+      build = args: rustPhpPlatform.buildRustPhpExtension (example.args // { php = php84; } // args);
+      evaluates = args: (builtins.tryEval (build args).drvPath).success;
     in
     evalTests "arguments" {
       testNative = {
         expr = evaluates { };
         expected = true;
       };
-      testNativeZts = {
-        expr = evaluates { zts = true; };
+      testNativeThreadSafety = {
+        expr = evaluates { threadSafety = "zts"; };
         expected = false;
       };
       testNativeAllowedLibraries = {
@@ -290,21 +287,52 @@ lib.listToAttrs (
       testTarget = {
         expr = evaluates {
           target = aarch64-linux-musl;
-          zts = false;
+          threadSafety = "nts";
         };
         expected = true;
       };
-      testTargetWithoutZts = {
+      testTargetWithoutThreadSafety = {
         expr = evaluates { target = aarch64-linux-musl; };
         expected = false;
       };
-      testTargetNonBoolZts = {
+      testTargetUnknownThreadSafety = {
         expr = evaluates {
           target = aarch64-linux-musl;
-          zts = "yes";
+          threadSafety = "yes";
         };
         expected = false;
       };
+      testTargetBoolThreadSafety = {
+        expr = evaluates {
+          target = aarch64-linux-musl;
+          threadSafety = true;
+        };
+        expected = false;
+      };
+      # passthru.threadSafety: php's own without a target, the argument with one, which the
+      # headers are configured for (ztsSupport).
+      testThreadSafety =
+        let
+          native = build { };
+          portable = build {
+            target = aarch64-linux-musl;
+            threadSafety = "zts";
+          };
+        in
+        {
+          expr = {
+            native = native.threadSafety;
+            portable = portable.threadSafety;
+            portableHeaders = portable.headers.ztsSupport;
+            hasZts = native ? zts || portable ? zts;
+          };
+          expected = {
+            native = "nts";
+            portable = "zts";
+            portableHeaders = true;
+            hasZts = false;
+          };
+        };
     };
 
   # The devenv module, with stand-ins for the devenv options it reads: its outputs are the
@@ -368,21 +396,21 @@ lib.listToAttrs (
   input-derivation =
     let
       portable =
-        php: zts:
+        php: threadSafety:
         rustPhpPlatform.buildRustPhpExtension (
           example.args
           // {
-            inherit php zts;
+            inherit php threadSafety;
             target = rustPhpPlatform.targets.aarch64-linux-musl;
           }
         );
-      nts = portable php84 false;
+      nts = portable php84 "nts";
       native = example.build php84;
       shell = rustPhpPlatform.mkShell { php = php84; };
       closure = drv: pkgs.writeClosure [ drv.inputDerivation ];
     in
-    assert nts.inputDerivation.drvPath != (portable php85 false).inputDerivation.drvPath;
-    assert nts.inputDerivation.drvPath != (portable php84 true).inputDerivation.drvPath;
+    assert nts.inputDerivation.drvPath != (portable php85 "nts").inputDerivation.drvPath;
+    assert nts.inputDerivation.drvPath != (portable php84 "zts").inputDerivation.drvPath;
     runCommand "ext-php-rs-input-derivation" { } ''
       has() {
         if ! grep -qx "$2" "$3"; then
@@ -553,7 +581,7 @@ lib.listToAttrs (
     build-options-native = test "build-options-native" (build { });
     build-options-portable = test "build-options-portable" (build {
       target = hostTarget;
-      zts = false;
+      threadSafety = "nts";
     });
   }
 )

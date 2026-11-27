@@ -155,8 +155,9 @@ The derivation is named `php-<pname>-<version>`, as nixpkgs names its PHP extens
 - `target`: For a portable build, a target from [`targets`](#rustphpplatformtargets) or
   [`mkTarget`](#rustphpplatformmktarget). This is a compile target for Cargo, not Nix's
   `targetPlatform`.
-- `zts`: For a portable build, whether to build for a thread-safe (ZTS) PHP. Without a target,
-  `php`'s own thread safety is used.
+- `threadSafety`: For a portable build, the thread safety of the PHP to build for: `"nts"` or
+  `"zts"` (thread-safe), as PIE names the archives. Without a target, `php`'s own thread
+  safety is used.
 - `pname`, `version`, `src`: As for `buildRustPackage`.
 - `cargoHash`, `cargoLock` or `cargoDeps`: The Cargo dependencies, as for `buildRustPackage`.
 - `cargoPackage`: The Cargo package to build. Default: `pname`.
@@ -175,7 +176,8 @@ Its tests are off (`doCheck = false`): a module's tests need PHP's embed SAPI.
 - `lib/php/extensions/<extensionName>.so`: the module.
 - `share/ext-php-rs/bindings.rs`: the Zend API as bindgen generated it, to compare
   builds against other headers.
-- `passthru`: `extensionName`, `phpVersion`, `zts`, `target` and `headers`.
+- `passthru`: `extensionName`, `phpVersion`, `threadSafety` (`"nts"` or `"zts"`), `target`
+  and `headers`.
 
 The builds set the rustflags an ext-php-rs module needs (`-undefined dynamic_lookup` on
 macOS, no static C library on musl), on top of a project's own `.cargo/config.toml`.
@@ -206,7 +208,7 @@ hello-musl = rustPhpPlatform.buildRustPhpExtension {
   # …
   php = pkgs.php84;
   target = rustPhpPlatform.targets.aarch64-linux-musl;
-  zts = true;
+  threadSafety = "zts";
 };
 ```
 
@@ -260,7 +262,7 @@ for every combination of `php`, `targets` and `threadSafety`, as one
 
 #### Inputs
 
-- `args`: `buildRustPhpExtension`'s arguments, without `php`, `target` and `zts`.
+- `args`: `buildRustPhpExtension`'s arguments, without `php`, `target` and `threadSafety`.
 - `php`: The PHPs to build for (a list): one archive per PHP minor.
 - `targets`: The targets to build for. Default: every one of [`targets`](#rustphpplatformtargets).
 - `threadSafety`: Default: `[ "nts" "zts" ]`.
@@ -549,7 +551,7 @@ Portable builds build against them: see [How a portable build works](portable-bu
 
 - `php`: The PHP whose source to configure.
 - `target`: The target to configure for.
-- `zts`: Whether to configure a thread-safe PHP.
+- `ztsSupport`: Whether to configure a thread-safe (ZTS) PHP, as nixpkgs' PHP's `ztsSupport`.
 
 ### `rustPhpPlatform.rustToolchain`
 
