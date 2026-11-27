@@ -97,10 +97,6 @@ jobs:
         ts: [nts, zts]
         arch: [x86_64, arm64]
         libc: [glibc, musl]
-        # The official images of 8.6 are ZTS only (docker-library/php#1686). load-macos loads 8.6 NTS.
-        exclude:
-          - php: "8.6"
-            ts: nts
 
     steps:
       - name: Checkout repository
